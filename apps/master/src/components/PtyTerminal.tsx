@@ -40,6 +40,8 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
 
   // Mobile-detect по ширине, если не задано явно.
   const [isMobile, setIsMobile] = useState(false);
+  const [pasteModalOpen, setPasteModalOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -261,18 +263,25 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
   }
 
   /**
-   * Читает системный clipboard и шлёт содержимое в PTY.
-   * Требует HTTPS + user gesture — поэтому вызываем из onClick, а не автоматом.
-   * В iOS Safari тап по кнопке = user gesture, читать разрешено.
+   * Открывает модалку с textarea для вставки.
+   * Внутри модалки пробуем navigator.clipboard.readText() — если получилось,
+   * текст уже в поле. Иначе юзер long-press'ом вставляет сам.
    */
-  async function pasteFromClipboard(): Promise<void> {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) sendKey(text);
-    } catch (e) {
-      // Safari в приватном режиме или старый браузер — просим юзера ручной fallback
-      alert('Не могу прочитать буфер обмена. Попробуй long-press на поле ввода (snackbar iOS)\nили вставь в другую мини-форму и оттуда.');
-    }
+  function pasteFromClipboard(): void {
+    setPasteText('');
+    setPasteModalOpen(true);
+    // Асинхронно пробуем прочитать clipboard — подставим в поле если получится.
+    // navigator.clipboard.readText на iOS 16+ при HTTPS и user-gesture работает
+    // (тап по кнопке считается gesture'ом).
+    navigator.clipboard.readText?.()
+      .then((text) => { if (text) setPasteText(text); })
+      .catch(() => {}); // не получилось — юзер сам вставит
+  }
+
+  function submitPasteModal(): void {
+    if (pasteText) sendKey(pasteText);
+    setPasteModalOpen(false);
+    setPasteText('');
   }
 
   return (
@@ -360,6 +369,49 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
         <div className="px-3 py-1.5 text-[11.5px] font-mono shrink-0"
           style={{ background: '#1a0a0a', color: '#fca5a5', borderTop: '1px solid #262626' }}>
           {errorMsg}
+        </div>
+      )}
+
+      {/* Paste modal — fallback для случая когда clipboard API не сработал */}
+      {pasteModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center p-0 md:p-4"
+          style={{ background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setPasteModalOpen(false)}>
+          <div className="w-full md:max-w-md md:rounded-2xl p-4 pt-5 flex flex-col gap-3"
+            style={{
+              background: 'var(--surface)',
+              borderTopLeftRadius: 18, borderTopRightRadius: 18,
+              boxShadow: '0 -10px 40px rgba(0,0,0,.2)',
+              paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
+            }}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="w-11 h-1 rounded-full mx-auto -mt-1" style={{ background: 'var(--border-strong)' }} />
+            <div>
+              <div className="text-[15px] font-semibold">Вставить в терминал</div>
+              <div className="text-[11.5px] mt-0.5" style={{ color: 'var(--muted)' }}>
+                {pasteText ? '✓ взяли из буфера — проверь и нажми «Вставить»'
+                           : 'Long-press в поле ниже → «Paste» в iOS-меню'}
+              </div>
+            </div>
+            <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)}
+              autoFocus rows={4}
+              placeholder="сюда вставить скопированный текст…"
+              spellCheck={false} autoCapitalize="off" autoCorrect="off"
+              className="w-full px-3 py-2 rounded-lg text-[15px] bg-transparent outline-none font-mono"
+              style={{ border: '1px solid var(--border)', color: 'var(--fg)' }} />
+            <div className="flex gap-2">
+              <button onClick={() => setPasteModalOpen(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-[14px]"
+                style={{ background: 'var(--surface-2)', color: 'var(--fg-2)' }}>
+                Отмена
+              </button>
+              <button onClick={submitPasteModal} disabled={!pasteText}
+                className="flex-1 px-4 py-2.5 rounded-xl text-[14px] font-semibold disabled:opacity-40"
+                style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
+                Вставить ↵
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

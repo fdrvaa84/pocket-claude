@@ -38,12 +38,21 @@ export default function ClaudeLoginModal({ deviceId, deviceName, onClose }: Prop
           <button onClick={onClose} className="text-xl" style={{ color: 'var(--muted)' }}>×</button>
         </div>
 
-        {/* Подсказка сверху */}
-        <div className="px-5 py-2.5 shrink-0 text-[12.5px] leading-snug"
+        {/* Подсказка сверху — пошагово, с явным упоминанием кнопки Paste */}
+        <div className="px-5 py-3 shrink-0 text-[12.5px] leading-relaxed"
           style={{ background: 'var(--accent-light)', borderBottom: '1px solid var(--border)', color: 'var(--fg)' }}>
-          <b>Что делать:</b> ниже запустится <code className="font-mono">claude auth login</code>.
-          Появится ссылка — <b>тапни по ней</b>, залогинься на claude.ai, скопируй выданный код
-          и <b>вставь обратно в терминал</b>, нажми Enter.
+          <b className="block mb-1.5">Как залогиниться:</b>
+          <ol className="list-decimal list-inside space-y-0.5 text-[12px]">
+            <li>Подожди пока в терминале ниже появится <b>URL</b> (строка
+              вида <code className="font-mono text-[11px]" style={{ color: 'var(--accent)' }}>
+                https://console.anthropic.com/…?code=…
+              </code>).</li>
+            <li>Сделай <b>long-press на URL</b> → «Скопировать ссылку» → тапни ссылку → Safari откроет claude.ai.</li>
+            <li>Залогинься, скопируй выданный <b>код авторизации</b>.</li>
+            <li>Вернись сюда, нажми <b>«📋 Paste»</b> в правом верхнем углу терминала.
+              Откроется поле — сделай long-press → «Вставить» → жми «Вставить ↵».</li>
+            <li>В терминале теперь код + автоматический Enter. Увидишь <code className="font-mono">✓ Authenticated</code>.</li>
+          </ol>
         </div>
 
         {/* PTY со сразу-заряженной командой */}

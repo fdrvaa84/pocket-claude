@@ -680,7 +680,8 @@ export default function AppShell({ user }: { user: User }) {
                       {devices.map((d, idx) => {
                         const isLast = idx === devices.length - 1;
                         return (
-                          <div key={d.id} className="flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--surface)]">
+                          <button key={d.id} onClick={() => setShowSettings(true)}
+                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--surface)] text-left">
                             <span className="font-mono text-[12px] w-4 shrink-0" style={{ color: 'var(--muted)' }}>{isLast ? '└─' : '├─'}</span>
                             <span className="font-mono text-[10px] shrink-0"
                               style={{ color: d.online ? 'var(--ok)' : 'var(--danger)' }}>{d.online ? '●' : '○'}</span>
@@ -696,7 +697,8 @@ export default function AppShell({ user }: { user: User }) {
                             {d.online && d.claude_logged_in === false && (
                               <span className="font-mono text-[10.5px] shrink-0" style={{ color: 'var(--warn)' }}>⚠ no_login</span>
                             )}
-                          </div>
+                            <span className="font-mono text-[11px] shrink-0 opacity-40 group-hover:opacity-100" style={{ color: 'var(--muted)' }}>→</span>
+                          </button>
                         );
                       })}
                     </div>
