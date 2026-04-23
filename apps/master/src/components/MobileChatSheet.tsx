@@ -5,8 +5,9 @@
  * (mode / model / effort) и двух mobile-tab-bar кнопках (files / terminal) собрано в одну шторку.
  * Открывается тапом по [+] рядом с textarea или по pill «Sonnet 4.6 · Bypass» под композером.
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { MODELS, MODES, EFFORTS, type ModelValue, type EffortValue, type ModeValue } from './Controls';
+import { COMMANDS } from './slashCommands';
 
 interface Props {
   open: boolean;
@@ -19,7 +20,8 @@ interface Props {
   onEffortChange: (e: EffortValue) => void;
   onOpenFiles?: () => void;
   onOpenTerminal?: () => void;
-  onOpenSlashHelp?: () => void;
+  /** Вставить команду в input композера (и закрыть шторку). Юзер сам жмёт Send. */
+  onInsertCommand?: (text: string) => void;
 }
 
 export default function MobileChatSheet({
@@ -27,8 +29,11 @@ export default function MobileChatSheet({
   mode, onModeChange,
   model, onModelChange,
   effort, onEffortChange,
-  onOpenFiles, onOpenTerminal, onOpenSlashHelp,
+  onOpenFiles, onOpenTerminal, onInsertCommand,
 }: Props) {
+  const [commandsOpen, setCommandsOpen] = useState(false);
+  // При закрытии всей шторки — схлопываем внутренний раскрытый список команд
+  useEffect(() => { if (!open) setCommandsOpen(false); }, [open]);
   // Блокируем прокрутку body пока шторка открыта.
   useEffect(() => {
     if (!open) return;
@@ -151,24 +156,87 @@ export default function MobileChatSheet({
             style={{ color: 'var(--muted)' }}>Быстрые действия</div>
           <div className="rounded-[14px] overflow-hidden"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            {[
-              { ic: '📁', title: 'Файлы устройства', right: '⌘F', onClick: onOpenFiles },
-              { ic: '>_', title: 'Terminal',          right: '⌘T', onClick: onOpenTerminal },
-              { ic: '/',  title: 'Все slash-команды',              onClick: onOpenSlashHelp },
-              { ic: '📎', title: 'Прикрепить файл',  right: 'soon', disabled: true },
-            ].map((a, i, arr) => (
-              <button key={i} type="button"
-                disabled={a.disabled}
-                onClick={() => { if (!a.disabled && a.onClick) { a.onClick(); onClose(); } }}
-                className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-[15px] disabled:opacity-50"
-                style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : '0' }}>
-                <span className="w-6 text-center font-mono opacity-85">{a.ic}</span>
-                <span className="flex-1">{a.title}</span>
-                {a.right && (
-                  <span className="font-mono text-[11.5px]" style={{ color: 'var(--muted)' }}>{a.right}</span>
-                )}
-              </button>
-            ))}
+            {/* Файлы устройства */}
+            <button type="button"
+              onClick={() => { if (onOpenFiles) { onOpenFiles(); onClose(); } }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-[15px]"
+              style={{ borderBottom: '1px solid var(--border)' }}>
+              <span className="w-6 text-center font-mono opacity-85">📁</span>
+              <span className="flex-1">Файлы устройства</span>
+              <span className="font-mono text-[11.5px]" style={{ color: 'var(--muted)' }}>⌘F</span>
+            </button>
+
+            {/* Terminal */}
+            <button type="button"
+              onClick={() => { if (onOpenTerminal) { onOpenTerminal(); onClose(); } }}
+              className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-[15px]"
+              style={{ borderBottom: '1px solid var(--border)' }}>
+              <span className="w-6 text-center font-mono opacity-85">&gt;_</span>
+              <span className="flex-1">Terminal</span>
+              <span className="font-mono text-[11.5px]" style={{ color: 'var(--muted)' }}>⌘T</span>
+            </button>
+
+            {/* Slash-команды — аккордеон */}
+            <button type="button"
+              onClick={() => setCommandsOpen(v => !v)}
+              className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-[15px]"
+              style={{ borderBottom: commandsOpen ? '1px solid var(--border)' : '1px solid var(--border)' }}
+              aria-expanded={commandsOpen}>
+              <span className="w-6 text-center font-mono opacity-85">/</span>
+              <span className="flex-1">Все slash-команды</span>
+              <span className="font-mono text-[11.5px] transition-transform duration-200"
+                style={{
+                  color: 'var(--muted)',
+                  transform: commandsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                }}>▾</span>
+            </button>
+
+            {/* Раскрывающийся список команд. Тап по команде → вставка в input. */}
+            {commandsOpen && (
+              <div className="max-h-[280px] overflow-y-auto"
+                style={{ background: 'var(--bg)', borderBottom: '1px solid var(--border)' }}>
+                {COMMANDS.map((c, i, arr) => {
+                  // Команды с args ждут ввода → вставляем "/cmd " с пробелом в конце.
+                  // Без args → вставляем "/cmd" чистым — юзер жмёт Send.
+                  const toInsert = c.name + (c.args ? ' ' : '');
+                  return (
+                    <button key={c.name} type="button"
+                      onClick={() => {
+                        if (onInsertCommand) onInsertCommand(toInsert);
+                        onClose();
+                      }}
+                      className="w-full flex items-baseline gap-2.5 px-4 py-2.5 text-left"
+                      style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : '0' }}>
+                      <span className="font-mono text-[13px] shrink-0" style={{ color: 'var(--accent)' }}>
+                        {c.name}
+                      </span>
+                      {c.args && (
+                        <span className="font-mono text-[11.5px] shrink-0" style={{ color: 'var(--muted)' }}>
+                          {c.args}
+                        </span>
+                      )}
+                      <span className="text-[12.5px] truncate min-w-0 flex-1" style={{ color: 'var(--fg-2)' }}>
+                        {c.description}
+                      </span>
+                      {c.kind === 'claude' && (
+                        <span className="font-mono text-[9.5px] px-1 py-px rounded shrink-0"
+                          style={{ background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)' }}>
+                          claude
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Прикрепить файл — disabled */}
+            <button type="button" disabled
+              className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-[15px] opacity-50">
+              <span className="w-6 text-center font-mono opacity-85">📎</span>
+              <span className="flex-1">Прикрепить файл</span>
+              <span className="font-mono text-[11.5px]" style={{ color: 'var(--muted)' }}>soon</span>
+            </button>
           </div>
         </div>
       </div>

@@ -1146,7 +1146,13 @@ export default function AppShell({ user }: { user: User }) {
         onEffortChange={setEffort}
         onOpenFiles={() => { setRightTab('files'); setRightOpen(true); setMobilePane('files'); }}
         onOpenTerminal={() => { setRightTab('terminal'); setRightOpen(true); setMobilePane('terminal'); }}
-        onOpenSlashHelp={() => { setInput('/help'); setSlashOpen(true); setSlashIdx(0); }}
+        onInsertCommand={(text) => {
+          setInput(text);
+          // Открываем slash-dropdown и фокусируем textarea — юзер либо сразу жмёт Send,
+          // либо дописывает args (например, для /cd, /! и т.п.)
+          setSlashOpen(false);
+          setTimeout(() => taRef.current?.focus(), 100);
+        }}
       />
     </div>
   );
