@@ -130,7 +130,10 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
           const m = JSON.parse(ev.data);
           if (m.type === 'pty.opened') {
             setStatus('ready');
-            term!.focus();
+            // Фокусируемся на xterm только на desktop. На iOS это сразу
+            // поднимет экранную клавиатуру — юзер работает через quick-bar,
+            // keyboard будет только мешать.
+            if (window.innerWidth >= 768) term!.focus();
             // Авто-запуск начальной команды (например, `claude auth login`).
             // Небольшая задержка чтобы shell успел отрисовать prompt.
             if (initialCommand && ws && ws.readyState === WebSocket.OPEN) {
@@ -252,7 +255,6 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
   }, [status, onExit]);
 
   function sendKey(data: string): boolean {
-    const term = termRef.current;
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       console.warn('[pty] ws not open, cannot send', { readyState: ws?.readyState });
@@ -274,7 +276,9 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
       };
       sendNext();
     }
-    term?.focus();
+    // NB: term.focus() сознательно НЕ вызываем — на iOS это поднимает
+    // экранную клавиатуру каждый раз когда юзер тапает quick-bar. На
+    // desktop xterm получает фокус при обычном клике на canvas.
     return true;
   }
 
