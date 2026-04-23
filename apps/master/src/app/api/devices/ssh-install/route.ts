@@ -23,8 +23,13 @@ export async function POST(req: NextRequest) {
   if (!host || !username || !auth || !connectCmd) {
     return new Response('Bad request: need host, username, auth, connectCmd', { status: 400 });
   }
-  if (!/^curl\s+-s?s?L\s+https:\/\/[^\s]+\/connect\.sh\s+\|\s+bash\s+/.test(connectCmd)) {
-    return new Response('Bad connectCmd format', { status: 400 });
+  // Валидация: команда должна быть нашим installer'ом, а не чем-то произвольным.
+  // Формат: `curl -sSL <url>/connect.sh | [\\newline] bash -s -- --master wss://.../ws/agent --token X --name Y`
+  // Ослабленная проверка — curl может иметь разные флаги, между pipe и bash может быть перенос.
+  const validCmd =
+    /^curl\s+[^|]*https?:\/\/[^\s|]+\/connect\.sh[\s\S]*\|[\s\S]*bash\s+-s\s+--\s+--master\s+wss?:\/\/\S+\/ws\/agent\s+--token\s+\S+\s+--name\s+\S+/.test(connectCmd);
+  if (!validCmd) {
+    return new Response(`Bad connectCmd format: ${connectCmd.slice(0, 100)}...`, { status: 400 });
   }
 
   const encoder = new TextEncoder();
