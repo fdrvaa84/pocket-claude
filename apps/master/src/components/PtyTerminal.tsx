@@ -99,27 +99,44 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
       const collected: string[] = [];
       let current: string | null = null;
 
+      // Счётчик подряд идущих "пустых" строк во время сбора — даём 2 lookahead на blank,
+      // чтобы пережить претерпеть PTY-double-spacing между wrap-строками URL.
+      let blankInRow = 0;
+      const FLUSH_AFTER_BLANK = 2; // если 2+ blank подряд после URL — закрываем URL
+
       for (const raw of lines) {
         const line = raw.trim();
+
         if (current) {
-          // Продолжение? Только если строка не пустая, без пробелов внутри, вся из URL-символов
-          if (line && !/\s/.test(line) && URL_CHAR.test(line)) {
-            current += line;
+          if (line === '') {
+            blankInRow++;
+            if (blankInRow > FLUSH_AFTER_BLANK) {
+              collected.push(current);
+              current = null;
+              blankInRow = 0;
+            }
             continue;
           }
-          // Конец URL — сохраняем и смотрим нет ли в этой же строке нового https://
+          // Продолжение URL? Без пробелов внутри + только URL-символы.
+          if (!/\s/.test(line) && URL_CHAR.test(line)) {
+            current += line;
+            blankInRow = 0;
+            continue;
+          }
+          // Не URL — закрываем накопленное.
           collected.push(current);
           current = null;
+          blankInRow = 0;
         }
-        // Ищем https:// в текущей строке
+
+        // Ищем https:// в текущей строке.
         const idx = line.search(/https?:\/\//);
         if (idx >= 0) {
-          // Отрезаем хвост строки с места где начинается https, до первого пробела
           const tail = line.slice(idx);
           const spaceIdx = tail.search(/\s/);
           const urlStart = spaceIdx >= 0 ? tail.slice(0, spaceIdx) : tail;
           current = urlStart;
-          // Если в строке после URL был пробел — URL закончился прямо в этой строке
+          blankInRow = 0;
           if (spaceIdx >= 0) {
             collected.push(current);
             current = null;
