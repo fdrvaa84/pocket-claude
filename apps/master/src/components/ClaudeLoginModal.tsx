@@ -24,7 +24,7 @@ export default function ClaudeLoginModal({ deviceId, deviceName, onClose }: Prop
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(6px)' }}
       onClick={onClose}>
-      <div className="w-full max-w-2xl h-[80dvh] rounded-2xl flex flex-col overflow-hidden"
+      <div className="w-full max-w-2xl h-[92dvh] md:h-[80dvh] rounded-2xl flex flex-col overflow-hidden"
         style={{ background: 'var(--surface)', boxShadow: '0 8px 24px rgba(0,0,0,.2)' }}
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 shrink-0"
@@ -38,22 +38,22 @@ export default function ClaudeLoginModal({ deviceId, deviceName, onClose }: Prop
           <button onClick={onClose} className="text-xl" style={{ color: 'var(--muted)' }}>×</button>
         </div>
 
-        {/* Подсказка сверху — пошагово, с явным упоминанием кнопки Paste */}
-        <div className="px-5 py-3 shrink-0 text-[12.5px] leading-relaxed"
+        {/* Подсказка сверху — по умолчанию свёрнута, не съедает место. */}
+        <details className="shrink-0"
           style={{ background: 'var(--accent-light)', borderBottom: '1px solid var(--border)', color: 'var(--fg)' }}>
-          <b className="block mb-1.5">Как залогиниться:</b>
-          <ol className="list-decimal list-inside space-y-0.5 text-[12px]">
-            <li>Подожди пока в терминале ниже появится <b>URL</b> (строка
-              вида <code className="font-mono text-[11px]" style={{ color: 'var(--accent)' }}>
-                https://console.anthropic.com/…?code=…
-              </code>).</li>
-            <li>Сделай <b>long-press на URL</b> → «Скопировать ссылку» → тапни ссылку → Safari откроет claude.ai.</li>
-            <li>Залогинься, скопируй выданный <b>код авторизации</b>.</li>
-            <li>Вернись сюда, нажми <b>«📋 Paste»</b> в правом верхнем углу терминала.
-              Откроется поле — сделай long-press → «Вставить» → жми «Вставить ↵».</li>
-            <li>В терминале теперь код + автоматический Enter. Увидишь <code className="font-mono">✓ Authenticated</code>.</li>
+          <summary className="px-4 py-2 text-[12.5px] cursor-pointer flex items-center justify-between"
+            style={{ listStyle: 'none' }}>
+            <span>❓ <b>Как залогиниться</b> <span style={{ color: 'var(--muted)' }}>— инструкция</span></span>
+            <span className="text-[11px]" style={{ color: 'var(--muted)' }}>развернуть ▾</span>
+          </summary>
+          <ol className="list-decimal list-inside space-y-1 text-[12px] px-4 pb-3 pt-1 leading-snug">
+            <li>В терминале появится <b>URL</b> <code className="font-mono text-[10.5px]" style={{ color: 'var(--accent)' }}>https://…?code=…</code>
+              — long-press → «Скопировать» → тап → Safari.</li>
+            <li>Залогинься, claude.ai выдаст <b>короткий код</b> (8-10 символов). Скопируй <b>именно код</b>, не URL.</li>
+            <li>Вернись, нажми <b>📋 Paste</b> сверху-справа. Вставь код в поле → «Вставить ↵».</li>
+            <li>Увидишь <code className="font-mono">✓ Authenticated</code>.</li>
           </ol>
-        </div>
+        </details>
 
         {/* PTY со сразу-заряженной командой */}
         <div className="flex-1 min-h-0">

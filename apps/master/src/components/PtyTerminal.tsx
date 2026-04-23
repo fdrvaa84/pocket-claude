@@ -73,6 +73,10 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
         cursorBlink: true,
         allowTransparency: false,
         scrollback: 2000,
+        // Позволить обычный touch-scroll на мобилах (без этого xterm блокирует
+        // свайпы, буфер прокрутки недоступен пальцем)
+        scrollOnUserInput: true,
+        altClickMovesCursor: false,
         theme: {
           background: '#0a0a0a',
           foreground: '#e5e7eb',
@@ -247,12 +251,35 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
     }
   }, [status, onExit]);
 
-  function sendKey(data: string): void {
+  function sendKey(data: string): boolean {
     const term = termRef.current;
     const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: 'pty.data', data: btoa(unescape(encodeURIComponent(data))) }));
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.warn('[pty] ws not open, cannot send', { readyState: ws?.readyState });
+      return false;
+    }
+    // Большие вставки (URL, многоразмерные пасты) дробим на чанки —
+    // чтобы PTY не перегружался и shell успевал echo'ить.
+    const CHUNK = 200;
+    if (data.length <= CHUNK) {
+      ws.send(JSON.stringify({ type: 'pty.data', data: btoa(unescape(encodeURIComponent(data))) }));
+    } else {
+      let i = 0;
+      const sendNext = () => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const slice = data.slice(i, i + CHUNK);
+        ws.send(JSON.stringify({ type: 'pty.data', data: btoa(unescape(encodeURIComponent(slice))) }));
+        i += CHUNK;
+        if (i < data.length) setTimeout(sendNext, 15);
+      };
+      sendNext();
+    }
     term?.focus();
+    return true;
+  }
+
+  function scrollBy(lines: number): void {
+    termRef.current?.scrollLines(lines);
   }
 
   function sendCtrl(letter: string): void {
@@ -279,7 +306,10 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
   }
 
   function submitPasteModal(): void {
-    if (pasteText) sendKey(pasteText);
+    if (pasteText) {
+      const ok = sendKey(pasteText);
+      if (!ok) { alert('Не удалось отправить в терминал — WebSocket закрыт'); return; }
+    }
     setPasteModalOpen(false);
     setPasteText('');
   }
@@ -302,6 +332,19 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
         <div className="flex-1" />
         {status === 'ready' && (
           <>
+            {/* Scroll buttons — xterm на мобиле плохо скроллится пальцем, даём явные кнопки */}
+            <button type="button" onClick={() => scrollBy(-5)}
+              title="Вверх по истории"
+              className="font-mono text-[14px] w-7 h-7 rounded hover:bg-[#1a1a1a]"
+              style={{ color: '#d4d4aa', border: '1px solid #262626', lineHeight: '1' }}>
+              ↑
+            </button>
+            <button type="button" onClick={() => scrollBy(5)}
+              title="Вниз по истории"
+              className="font-mono text-[14px] w-7 h-7 rounded hover:bg-[#1a1a1a]"
+              style={{ color: '#d4d4aa', border: '1px solid #262626', lineHeight: '1' }}>
+              ↓
+            </button>
             <button type="button" onClick={pasteFromClipboard}
               title="Вставить из буфера обмена"
               className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
