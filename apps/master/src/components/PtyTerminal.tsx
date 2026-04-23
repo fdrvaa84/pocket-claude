@@ -359,6 +359,12 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
               style={{ color: '#d4d4aa', border: '1px solid #262626' }}>
               📋 Paste
             </button>
+            <button type="button" onClick={() => sendKey('\r')}
+              title="Enter"
+              className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
+              style={{ color: '#d4d4aa', border: '1px solid #262626' }}>
+              ↵
+            </button>
             <button type="button" onClick={() => sendKey('\x03')}
               title="Прервать выполняющуюся команду (Ctrl+C)"
               className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
@@ -395,14 +401,21 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
             </>
           ) : (
             <>
+              <KeyBtn label="🔤" onClick={() => { setPasteText(''); setPasteModalOpen(true); }}
+                title="Открыть клавиатуру для ввода текста" />
+              <KeyBtn label="↵ Enter" onClick={() => sendKey('\r')}
+                title="Enter (выбрать / подтвердить)" />
               <KeyBtn label="📋" onClick={pasteFromClipboard}
                 title="Вставить из буфера обмена" />
               <KeyBtn label="↑" onClick={() => sendKey('\x1b[A')} />
               <KeyBtn label="↓" onClick={() => sendKey('\x1b[B')} />
               <KeyBtn label="←" onClick={() => sendKey('\x1b[D')} />
               <KeyBtn label="→" onClick={() => sendKey('\x1b[C')} />
-              {/* exit(q) — единая кнопка выхода из TUI (htop/top/less/man/tig/psql и т.д.).
-                  Для vim есть отдельная кнопка :q (Esc → :q → Enter). */}
+              {/* Цифры для выбора пунктов меню в interactive CLI (claude wizard,
+                  package managers, apt-get и т.п.) */}
+              {['1','2','3','4','5','6','7','8','9'].map(n => (
+                <KeyBtn key={n} label={n} onClick={() => sendKey(n)} />
+              ))}
               <KeyBtn label="exit(q)" onClick={() => sendKey('q')}
                 title="Выйти из htop/less/man/top/tig/psql" />
               <KeyBtn label=":q" onClick={() => sendKey('\x1b:q\r')}
