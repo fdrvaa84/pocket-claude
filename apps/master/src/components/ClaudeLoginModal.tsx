@@ -134,98 +134,68 @@ export default function ClaudeLoginModal({ deviceId, deviceName, onClose }: Prop
           ))}
         </div>
 
-        {/* ───── Subscription ───── */}
+        {/* ───── Subscription — OAuth через PTY ───── */}
         {method === 'subscription' && (
-          <div className="flex-1 overflow-y-auto px-4 pb-4 min-h-0">
-            {/* Большая primary-кнопка: выбрать файл credentials.json через file-picker */}
-            <div className="rounded-xl p-4 text-center mb-3"
-              style={{ background: 'var(--accent-light)', border: '2px dashed var(--accent)' }}>
-              <div className="text-[28px] mb-1">📂</div>
-              <div className="text-[14px] font-semibold mb-1">Выбери файл подписки</div>
-              <div className="text-[11.5px] mb-3" style={{ color: 'var(--muted)' }}>
-                на своём компьютере лежит в:<br />
-                <code className="font-mono text-[11px]" style={{ color: 'var(--fg)' }}>
-                  ~/.claude/.credentials.json
-                </code>
-              </div>
-              <label className="inline-block px-5 py-2.5 rounded-xl text-[14px] font-semibold cursor-pointer"
-                style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
-                Выбрать файл…
-                <input type="file" accept=".json,application/json" hidden
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const text = await file.text();
-                    try { JSON.parse(text); }
-                    catch { alert(`Файл "${file.name}" не похож на JSON — проверь что выбрал credentials.json`); return; }
-                    setCredsJson(text);
-                    await streamSSE(`/api/devices/${deviceId}/claude-set-credentials`, { credentials: text });
-                    setCredsJson('');
-                    // Сбрасываем input чтобы повторный выбор того же файла сработал
-                    e.target.value = '';
-                  }} />
-              </label>
-              <details className="mt-3 text-left">
-                <summary className="text-[11px] cursor-pointer" style={{ color: 'var(--muted)', listStyle: 'none' }}>
-                  💡 Как найти этот файл в Finder ▾
-                </summary>
-                <ol className="list-decimal list-inside text-[11px] mt-1 space-y-0.5 leading-snug" style={{ color: 'var(--fg-2)' }}>
-                  <li>В окне выбора файла нажми <code className="font-mono text-[10.5px]">⌘⇧.</code> (Shift+Cmd+точка) — покажутся скрытые папки</li>
-                  <li>Путь: <b>домашняя</b> → <code className="font-mono text-[10.5px]">.claude</code> → <code className="font-mono text-[10.5px]">.credentials.json</code></li>
-                  <li>Или в Safari вставь в адресную строку выбора: <code className="font-mono text-[10.5px]">~/.claude/</code></li>
-                </ol>
-              </details>
-            </div>
-
-            {/* Fallback: ручная вставка JSON — скрыто за раскрывашкой */}
-            <details className="rounded-xl overflow-hidden"
-              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-              <summary className="px-3 py-2 text-[12px] cursor-pointer flex items-center justify-between"
+          <>
+            {/* Короткая инструкция — свёрнутая по умолчанию */}
+            <details className="shrink-0"
+              style={{ background: 'var(--accent-light)', borderBottom: '1px solid var(--border)' }}>
+              <summary className="px-4 py-2 text-[12.5px] cursor-pointer flex items-center justify-between"
                 style={{ listStyle: 'none' }}>
-                <span>📋 <b>Вставить содержимое текстом</b> <span style={{ color: 'var(--muted)' }}>(fallback)</span></span>
+                <span>❓ <b>Как залогиниться через подписку</b> <span style={{ color: 'var(--muted)' }}>— 4 шага</span></span>
                 <span className="text-[11px]" style={{ color: 'var(--muted)' }}>▾</span>
               </summary>
-              <div className="px-3 pb-3 pt-1">
-                <div className="text-[11px] mb-2" style={{ color: 'var(--muted)' }}>
-                  Если файл-пикер не подходит (iOS, где нет доступа к ~/.claude/) — выполни на Mac'е{' '}
-                  <code className="font-mono">cat ~/.claude/.credentials.json</code>, скопируй вывод и вставь сюда:
-                </div>
-                <textarea value={credsJson}
-                  onChange={(e) => setCredsJson(e.target.value)}
-                  onInput={(e) => setCredsJson((e.target as HTMLTextAreaElement).value)}
-                  onPaste={(e) => {
-                    const t = e.clipboardData?.getData('text');
-                    if (t) { e.preventDefault(); setCredsJson(t); }
-                  }}
-                  rows={4} placeholder='{"claudeAiOauth":{"accessToken":"..."}}'
-                  spellCheck={false} autoCapitalize="off" autoCorrect="off"
-                  className="w-full px-3 py-2 rounded-lg text-[11.5px] bg-transparent outline-none font-mono"
-                  style={{ border: '1px solid var(--border)', color: 'var(--fg)' }} />
-                <button onClick={saveCredentials} disabled={status === 'saving' || !credsJson.trim()}
-                  className="w-full mt-2 px-4 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-40"
-                  style={{
-                    background: status === 'ok' ? 'var(--ok)' : 'var(--accent)',
-                    color: 'var(--bg)',
-                  }}>
-                  {status === 'saving' ? 'Копирую…' :
-                   status === 'ok' ? '✓ Готово' :
-                   'Вставить текстом'}
-                </button>
-              </div>
+              <ol className="list-decimal list-inside space-y-0.5 text-[12px] px-4 pb-3 pt-1 leading-snug">
+                <li>Ниже сам запустится <code className="font-mono text-[11px]">claude /login</code> — появится URL.</li>
+                <li><b>Long-press на URL</b> → «Скопировать ссылку» → тап → Safari откроет claude.ai.</li>
+                <li>Залогинься, claude.ai выдаст <b>код</b>. Скопируй его.</li>
+                <li>Вернись сюда → <b>📋 Paste</b> в верхнем углу терминала → вставь код → «Вставить ↵».</li>
+              </ol>
             </details>
 
-            {log && (
-              <div ref={logRef} className="mt-3 rounded-lg p-2 font-mono text-[11px] whitespace-pre-wrap max-h-[140px] overflow-y-auto"
-                style={{ background: '#0a0a0a', color: '#e5e7eb' }}>
-                {log}
-              </div>
-            )}
-
-            <div className="mt-3 text-center text-[11px]" style={{ color: 'var(--muted)' }}>
-              Токен работает ~6-8 часов, затем обновится автоматически.
-              Если надолго уехал в офлайн — повтори загрузку.
+            {/* PTY во весь экран модалки — как было изначально */}
+            <div className="flex-1 min-h-0">
+              <PtyTerminal
+                deviceId={deviceId}
+                deviceName={deviceName}
+                initialCommand="claude /login"
+                onExit={onClose}
+              />
             </div>
-          </div>
+
+            {/* Маленький fallback внизу — если OAuth не подошёл */}
+            <details className="shrink-0"
+              style={{ borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+              <summary className="px-4 py-2 text-[11.5px] cursor-pointer"
+                style={{ color: 'var(--muted)', listStyle: 'none' }}>
+                🔧 Не получается? Есть альтернатива ▾
+              </summary>
+              <div className="px-4 py-3 text-[11.5px]" style={{ color: 'var(--fg-2)' }}>
+                <div className="mb-2">Скопировать уже готовый <code className="font-mono">credentials.json</code> с компа:</div>
+                <label className="inline-block px-3 py-1.5 rounded-md text-[12px] cursor-pointer mr-2"
+                  style={{ background: 'var(--surface)', color: 'var(--fg)', border: '1px solid var(--border)' }}>
+                  📂 Выбрать файл
+                  <input type="file" accept=".json,application/json" hidden
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const text = await file.text();
+                      try { JSON.parse(text); }
+                      catch { alert(`Файл "${file.name}" не JSON`); return; }
+                      await streamSSE(`/api/devices/${deviceId}/claude-set-credentials`, { credentials: text });
+                      e.target.value = '';
+                    }} />
+                </label>
+                <span className="text-[10.5px]" style={{ color: 'var(--muted)' }}>путь: ~/.claude/.credentials.json</span>
+                {log && (
+                  <div ref={logRef} className="mt-2 rounded p-2 font-mono text-[10.5px] whitespace-pre-wrap max-h-[100px] overflow-y-auto"
+                    style={{ background: '#0a0a0a', color: '#e5e7eb' }}>
+                    {log}
+                  </div>
+                )}
+              </div>
+            </details>
+          </>
         )}
 
         {/* ───── API Key ───── */}
