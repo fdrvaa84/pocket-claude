@@ -42,6 +42,9 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
   const [isMobile, setIsMobile] = useState(false);
   const [pasteModalOpen, setPasteModalOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
+  /** Список найденных в буфере URL'ов (auto-detected). */
+  const [urls, setUrls] = useState<string[]>([]);
+  const [urlCopied, setUrlCopied] = useState<string | null>(null);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -56,6 +59,46 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
     let fit: FitAddonT | null = null;
     let ws: WebSocket | null = null;
     let resizeObs: ResizeObserver | null = null;
+    let urlScanTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Извлекает URL'ы из текущего буфера xterm с учётом soft-wrap'a.
+    // xterm разрывает длинные URLы через перенос строки — собираем их обратно.
+    const extractUrls = (): string[] => {
+      if (!term) return [];
+      const buf = term.buffer.active;
+      const lines: string[] = [];
+      const total = Math.min(buf.length, 200); // последние 200 строк хватит
+      const startIdx = buf.length - total;
+      for (let i = startIdx; i < buf.length; i++) {
+        const line = buf.getLine(i);
+        if (!line) continue;
+        const text = line.translateToString(true);
+        if (i > startIdx && line.isWrapped) {
+          // Soft-wrap — это продолжение предыдущей логической строки
+          lines[lines.length - 1] += text;
+        } else {
+          lines.push(text);
+        }
+      }
+      const fullText = lines.join('\n');
+      const matches = [...fullText.matchAll(/https?:\/\/[^\s\u001b\u0007"'<>`]+/g)].map(m => m[0]);
+      // Убираем дубликаты, режем хвостовые знаки пунктуации
+      const cleaned = matches.map(u => u.replace(/[.,;:)\]}]+$/, ''));
+      return Array.from(new Set(cleaned)).slice(-5); // максимум 5 последних
+    };
+
+    const scheduleUrlScan = () => {
+      if (urlScanTimer) clearTimeout(urlScanTimer);
+      urlScanTimer = setTimeout(() => {
+        if (destroyed) return;
+        const found = extractUrls();
+        setUrls(prev => {
+          // Обновляем только если набор реально изменился
+          if (prev.length === found.length && prev.every((u, i) => u === found[i])) return prev;
+          return found;
+        });
+      }, 250);
+    };
 
     (async () => {
       // Динамический импорт — xterm только на клиенте
@@ -153,6 +196,9 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
             const bytes = new Uint8Array(raw.length);
             for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
             term!.write(new TextDecoder('utf-8').decode(bytes));
+            // Дебаунсим извлечение URLs — после write нужно дождаться пока xterm
+            // отрисует, иначе buffer не содержит свежие данные.
+            scheduleUrlScan();
           } else if (m.type === 'pty.exit') {
             setStatus('closed');
             term!.write(`\r\n\x1b[90m[процесс завершён, код=${m.code}]\x1b[0m\r\n`);
@@ -238,6 +284,7 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
         const t = (ws as any)?.__pingTimer;
         if (t) clearInterval(t);
       } catch {}
+      try { if (urlScanTimer) clearTimeout(urlScanTimer); } catch {}
       try { ws?.close(); } catch {}
       try { term?.dispose(); } catch {}
       termRef.current = null;
@@ -375,6 +422,36 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
           Ctrl+C
         </button>
       </div>
+
+      {/* Auto-detected URLs — для случаев типа claude /login, где URL в выводе
+          разрывается xterm'овским soft-wrap'ом и WebLinksAddon не может его склеить.
+          Показываем кликабельные кнопки «Открыть» / «Копировать». */}
+      {urls.length > 0 && (
+        <div className="shrink-0 px-2 py-1.5 flex flex-col gap-1 max-h-[80px] overflow-y-auto"
+          style={{ background: '#1a1a0a', borderBottom: '1px solid #262626' }}>
+          {urls.map((url) => (
+            <div key={url} className="flex items-center gap-1.5">
+              <span className="font-mono text-[10.5px] truncate flex-1" style={{ color: '#d4d4aa' }}>
+                🔗 {url}
+              </span>
+              <button type="button"
+                onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+                className="shrink-0 font-mono text-[10.5px] px-1.5 py-0.5 rounded"
+                style={{ background: '#d4d4aa', color: '#0a0a0a' }}>
+                Открыть
+              </button>
+              <button type="button"
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(url); setUrlCopied(url); setTimeout(() => setUrlCopied(null), 1500); } catch {}
+                }}
+                className="shrink-0 font-mono text-[10.5px] px-1.5 py-0.5 rounded"
+                style={{ background: '#262626', color: '#d4d4aa', border: '1px solid #404040' }}>
+                {urlCopied === url ? '✓' : 'Copy'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Xterm host */}
       <div ref={hostRef} className="flex-1 min-h-0 overflow-hidden"
