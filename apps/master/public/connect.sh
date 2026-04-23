@@ -91,6 +91,11 @@ install_node_pty() {
 }
 install_node_pty
 
+# Очищаем старые nohup-процессы агента (оставшиеся от предыдущих установок),
+# чтобы не было конфликта с новым systemd-юнитом.
+pkill -f 'pocket-claude/agent.js' 2>/dev/null || true
+sleep 1
+
 # Install service
 if [[ "$OS" == "Linux" ]]; then
   # Под root ставим system-unit с лимитами и auto-restart.
@@ -198,3 +203,27 @@ chmod +x "$DIR/uninstall.sh"
 echo ""
 echo "Done! Device '$NAME' is now connecting to $MASTER"
 echo "Uninstall: $DIR/uninstall.sh"
+
+# Проверка что агент реально стартовал и не упал.
+# Если не active через 5 сек — покажем последние 20 строк лога с диагностикой.
+sleep 6
+echo ""
+echo ">> Проверяю что агент жив..."
+is_active_sys=$(systemctl is-active pocket-claude-agent 2>/dev/null || true)
+is_active_user=$(systemctl --user is-active pocket-claude-agent 2>/dev/null || true)
+# Показываем последние 15 строк лога ВСЕГДА — чтобы видеть connected/disconnected
+# и ошибки даже если процесс мгновенно рестартает в active.
+echo "────── последние 15 строк лога агента ──────"
+journalctl -u pocket-claude-agent -n 15 --no-pager 2>/dev/null \
+  || journalctl --user -u pocket-claude-agent -n 15 --no-pager 2>/dev/null \
+  || echo "(journalctl недоступен)"
+echo "────────────────────────────────────────────"
+if [[ "$is_active_sys" == "active" || "$is_active_user" == "active" ]]; then
+  echo "✓ systemd unit active"
+else
+  echo "⚠ systemd unit НЕ active"
+fi
+echo "Диагностика окружения:"
+command -v node >/dev/null 2>&1 && echo "  node: $(node --version) @ $(which node)" || echo "  ❌ node НЕ НАЙДЕН"
+command -v curl >/dev/null 2>&1 && echo "  curl: $(curl --version | head -1 | cut -d ' ' -f 1-2)" || echo "  ❌ curl отсутствует"
+echo "  master URL: $MASTER"
