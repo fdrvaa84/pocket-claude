@@ -93,10 +93,10 @@ export default function ClaudeLoginModal({ deviceId, deviceName, onClose }: Prop
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-[60] flex md:items-center md:justify-center md:p-4"
       style={{ background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(6px)' }}
       onClick={() => status !== 'saving' && onClose()}>
-      <div className="w-full max-w-md max-h-[92dvh] md:max-h-[85dvh] rounded-2xl flex flex-col overflow-hidden"
+      <div className="w-full h-dvh md:h-auto md:max-w-md md:max-h-[85dvh] md:rounded-2xl flex flex-col overflow-hidden"
         style={{ background: 'var(--surface)', boxShadow: '0 8px 24px rgba(0,0,0,.2)' }}
         onClick={(e) => e.stopPropagation()}>
 
