@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import ClientBoot from '@/components/ClientBoot';
 
 export const metadata: Metadata = {
   title: 'Pocket Claude',
@@ -18,7 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           __html: `(function(){var t=localStorage.getItem('pc_theme')||'soft';document.documentElement.setAttribute('data-theme',t)})()`
         }} />
       </head>
-      <body className="h-dvh overflow-hidden">{children}</body>
+      <body className="h-dvh overflow-hidden">
+        <ClientBoot />
+        {children}
+      </body>
     </html>
   );
 }

@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { query, queryOne } from './db';
 
@@ -68,4 +69,83 @@ export async function register(email: string, password: string, name?: string, i
 export async function hasAnyUser(): Promise<boolean> {
   const r = await queryOne<{ c: string }>(`SELECT COUNT(*)::text as c FROM pc.users`, []);
   return Number(r?.c || '0') > 0;
+}
+
+/* ============================== INVITE CODES ============================== */
+
+export interface InviteCode {
+  code: string;
+  created_by: string;
+  created_at: string;
+  used_by: string | null;
+  used_at: string | null;
+  expires_at: string | null;
+  note: string | null;
+}
+
+/** Генерит и сохраняет invite-код. Возвращает сам код (его нужно отдать инвайтеду). */
+export async function createInvite(adminId: string, opts: { ttlDays?: number; note?: string } = {}): Promise<string> {
+  const code = randomBytes(8).toString('base64url');
+  const expiresAt = opts.ttlDays
+    ? new Date(Date.now() + opts.ttlDays * 24 * 3600 * 1000).toISOString()
+    : null;
+  await query(
+    `INSERT INTO pc.invite_codes (code, created_by, expires_at, note) VALUES ($1, $2, $3, $4)`,
+    [code, adminId, expiresAt, opts.note || null],
+  );
+  return code;
+}
+
+export async function listInvites(adminId: string): Promise<InviteCode[]> {
+  return await query<InviteCode>(
+    `SELECT code, created_by, created_at, used_by, used_at, expires_at, note
+     FROM pc.invite_codes WHERE created_by = $1 ORDER BY created_at DESC LIMIT 200`,
+    [adminId],
+  );
+}
+
+export async function revokeInvite(adminId: string, code: string): Promise<boolean> {
+  const rows = await query<{ code: string }>(
+    `DELETE FROM pc.invite_codes WHERE code = $1 AND created_by = $2 AND used_by IS NULL RETURNING code`,
+    [code, adminId],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Проверяет invite-код. Возвращает true если можно использовать.
+ * НЕ помечает как использованный — это делает registerWithInvite.
+ */
+export async function validateInvite(code: string): Promise<boolean> {
+  const r = await queryOne<{ used_by: string | null; expires_at: string | null }>(
+    `SELECT used_by, expires_at FROM pc.invite_codes WHERE code = $1`,
+    [code],
+  );
+  if (!r) return false;
+  if (r.used_by) return false;
+  if (r.expires_at && new Date(r.expires_at) < new Date()) return false;
+  return true;
+}
+
+/** Регистрирует юзера и помечает invite-код как использованный. */
+export async function registerWithInvite(email: string, password: string, name: string | undefined, code: string): Promise<User> {
+  const valid = await validateInvite(code);
+  if (!valid) throw new Error('Invite code is invalid or already used');
+  const user = await register(email, password, name, false);
+  await query(
+    `UPDATE pc.invite_codes SET used_by = $1, used_at = NOW() WHERE code = $2 AND used_by IS NULL`,
+    [user.id, code],
+  );
+  return user;
+}
+
+/* ============================== PASSWORD POLICY =========================== */
+
+/** Возвращает null если ок, иначе сообщение об ошибке. */
+export function checkPasswordPolicy(pw: string): string | null {
+  if (!pw || pw.length < 8) return 'Пароль минимум 8 символов';
+  if (!/[A-Za-zА-Яа-я]/.test(pw)) return 'Пароль должен содержать буквы';
+  if (!/[0-9]/.test(pw)) return 'Пароль должен содержать цифры';
+  if (pw.length > 200) return 'Пароль слишком длинный';
+  return null;
 }

@@ -7,6 +7,7 @@ import { effectiveIntent, type DeviceIntent } from '@/lib/device-intent';
 
 const ClaudeInstallModal = dynamic(() => import('./ClaudeInstallModal'), { ssr: false, loading: () => null });
 const ClaudeLoginModal = dynamic(() => import('./ClaudeLoginModal'), { ssr: false, loading: () => null });
+const InvitesPanel = dynamic(() => import('./InvitesPanel'), { ssr: false, loading: () => null });
 
 interface User { id: string; email: string; name: string | null }
 interface Device {
@@ -267,6 +268,9 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
               }}
             />
           )}
+
+          {/* Invites */}
+          <InvitesPanel />
 
           {/* Theme */}
           <div className="p-5" style={{ borderBottom: '1px solid var(--border)' }}>

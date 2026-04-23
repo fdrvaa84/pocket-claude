@@ -3,6 +3,8 @@ import { getAuthUser } from '@/lib/auth';
 import { queryOne, query } from '@/lib/db';
 import { hub } from '@/lib/ws-hub';
 import { v4 as uuidv4 } from 'uuid';
+import { rateLimit } from '@/lib/rate-limit';
+import { requireCsrf } from '@/lib/csrf';
 import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@pocket-claude/protocol';
 
 /**
@@ -19,8 +21,12 @@ import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@pocket-clau
  * Сам JSON и любые токены внутри НЕ сохраняются в нашей БД.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const csrfBlocked = await requireCsrf(req);
+  if (csrfBlocked) return csrfBlocked;
   const user = await getAuthUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
+  const limited = rateLimit(req, { key: 'claude-set-creds', max: 5, windowMs: 60_000, perUser: user.id });
+  if (limited) return limited;
   const { id: deviceId } = await params;
 
   const body = await req.json().catch(() => ({}));

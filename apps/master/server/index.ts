@@ -15,6 +15,7 @@ import { hub } from '../src/lib/ws-hub';
 import { queryOne, query } from '../src/lib/db';
 import { hashToken } from '../src/lib/crypto';
 import { processClaudeMessage, finalizeJob } from '../src/lib/job-tracker';
+import { log } from '../src/lib/log';
 import { v4 as uuidv4 } from 'uuid';
 
 const dev = process.env.NODE_ENV !== 'production';
@@ -39,7 +40,7 @@ app.prepare().then(async () => {
       const parsedUrl = parse(req.url || '/', true);
       await handle(req, res, parsedUrl);
     } catch (e) {
-      console.error('HTTP handler error', e);
+      log.error('http.handler', { err: (e as Error).message, stack: (e as Error).stack });
       res.statusCode = 500;
       res.end('internal error');
     }
@@ -96,7 +97,7 @@ app.prepare().then(async () => {
   });
 
   server.listen(port, hostname, () => {
-    console.log(`[master] ready on http://${hostname}:${port}  (dev=${dev})`);
+    log.info('master.ready', { url: `http://${hostname}:${port}`, dev });
   });
 });
 
@@ -120,7 +121,7 @@ async function handleJobsRecap(
     // Подпишемся на события replay и обработаем как обычные
     hub().register_job_subscriber(j.id, async (m) => {
       try { await processClaudeMessage(j.id, m); }
-      catch (e) { console.error('[recap] persist error:', (e as Error).message); }
+      catch (e) { log.error('recap.persist', { jobId: j.id, err: (e as Error).message }); }
       // Если пришёл done/error — отписываемся и шлём ack
       if (m.type === 'claude.done' || m.type === 'claude.error') {
         hub().unregister_job_subscriber(j.id);
@@ -131,12 +132,12 @@ async function handleJobsRecap(
     // Просим агента переиграть все события
     const resume: JobsResume = { type: 'jobs.resume', id: uuidv4(), job_id: j.id };
     ws.send(JSON.stringify(resume));
-    console.log(`[recap] resume requested for ${j.id}`);
+    log.info('recap.resume', { jobId: j.id });
   }
 }
 
 function onAgentConnect(ws: WebSocket, device: { id: string; user_id: string; name: string }): void {
-  console.log(`[ws] agent connected: ${device.name} (${device.id})`);
+  log.info('ws.agent.connected', { deviceId: device.id, name: device.name });
   hub().register(device.id, device.user_id, device.name, ws as any);
 
   ws.on('message', (raw: Buffer) => {
@@ -166,7 +167,7 @@ function onAgentConnect(ws: WebSocket, device: { id: string; user_id: string; na
     // Для каждого job в статусе running/done — просим replay событий из буфера агента.
     if (msg.type === 'jobs.recap') {
       handleJobsRecap(ws, device, msg as JobsRecap).catch((e) =>
-        console.error('[ws] recap error:', e.message));
+        log.error('ws.recap', { deviceId: device.id, err: e.message }));
       return;
     }
 
@@ -175,10 +176,10 @@ function onAgentConnect(ws: WebSocket, device: { id: string; user_id: string; na
   });
 
   ws.on('close', () => {
-    console.log(`[ws] agent disconnected: ${device.name}`);
+    log.info('ws.agent.disconnected', { deviceId: device.id, name: device.name });
     hub().unregister(device.id);
   });
-  ws.on('error', (e) => console.error('[ws] agent error', e));
+  ws.on('error', (e) => log.error('ws.agent.error', { deviceId: device.id, err: e.message }));
 }
 
 /**
@@ -194,7 +195,7 @@ function onClientPtyConnect(
   opts: { deviceId: string; userId: string; cwd?: string; cols: number; rows: number },
 ): void {
   const cid = uuidv4();
-  console.log(`[ws-pty] client connected, device=${opts.deviceId}, cid=${cid}`);
+  log.info('ws.pty.connected', { deviceId: opts.deviceId, cid });
 
   let closed = false;
   let unsubscribe: (() => void) | null = null;
@@ -268,7 +269,7 @@ function onClientPtyConnect(
     if (unsubscribe) { try { unsubscribe(); } catch {} }
   };
 
-  ws.on('close', () => { console.log(`[ws-pty] client closed cid=${cid}`); cleanup(); });
+  ws.on('close', () => { log.info('ws.pty.closed', { cid }); cleanup(); });
   ws.on('error', () => cleanup());
 }
 

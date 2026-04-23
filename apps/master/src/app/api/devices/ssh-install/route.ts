@@ -1,5 +1,8 @@
 import { NextRequest } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { rateLimit } from '@/lib/rate-limit';
+import { requireCsrf } from '@/lib/csrf';
+import { log } from '@/lib/log';
 import { Client } from 'ssh2';
 
 /**
@@ -14,8 +17,13 @@ import { Client } from 'ssh2';
  * Credentials существуют только в памяти процесса, в БД/логи не пишутся.
  */
 export async function POST(req: NextRequest) {
+  const csrfBlocked = await requireCsrf(req);
+  if (csrfBlocked) return csrfBlocked;
   const user = await getAuthUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
+  // 1 SSH-installer на 30 секунд per-user — защита от спама/долбёжки чужих хостов.
+  const limited = rateLimit(req, { key: 'ssh-install', max: 1, windowMs: 30_000, perUser: user.id });
+  if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
   const { host, port = 22, username, auth, connectCmd } = body || {};
@@ -104,6 +112,7 @@ export async function POST(req: NextRequest) {
           return;
         }
         push({ type: 'connecting', host, port, username });
+        log.info('ssh-install start', { userId: user.id, host, port, username, authType: auth.type });
         conn.connect(opts as never);
       } catch (e) {
         push({ type: 'error', message: (e as Error).message });

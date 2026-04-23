@@ -1,39 +1,118 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthUser, login, logout, register, hasAnyUser } from '@/lib/auth';
+import {
+  getAuthUser, login, logout, register, hasAnyUser,
+  registerWithInvite, checkPasswordPolicy,
+} from '@/lib/auth';
+import { rateLimit } from '@/lib/rate-limit';
+import { ensureCsrfCookie, requireCsrf } from '@/lib/csrf';
+import { auditAuth, clientIpFrom } from '@/lib/audit';
+import { log } from '@/lib/log';
 
-/** GET — текущий пользователь / нужен ли setup */
+/** GET — текущий пользователь / нужен ли setup. Также выставляет CSRF cookie. */
 export async function GET() {
   const user = await getAuthUser();
-  if (user) return NextResponse.json({ user });
   const hasUser = await hasAnyUser();
-  return NextResponse.json({ user: null, setup: !hasUser });
+  const res = NextResponse.json(user ? { user } : { user: null, setup: !hasUser });
+  await ensureCsrfCookie(res);
+  return res;
 }
 
 /** POST — логин */
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json();
-  if (!email || !password) return NextResponse.json({ error: 'email and password required' }, { status: 400 });
-  const user = await login(String(email).trim().toLowerCase(), String(password));
-  if (!user) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+  // 1. CSRF
+  const csrfBlocked = await requireCsrf(req);
+  if (csrfBlocked) {
+    await auditAuth({ event: 'csrf_fail', ip: clientIpFrom(req), userAgent: req.headers.get('user-agent') });
+    return csrfBlocked;
+  }
+  // 2. Rate-limit: 5 попыток в минуту с одного IP
+  const limited = rateLimit(req, { key: 'login', max: 5, windowMs: 60_000 });
+  if (limited) {
+    await auditAuth({ event: 'rate_limit', ip: clientIpFrom(req), userAgent: req.headers.get('user-agent'), meta: { route: 'login' } });
+    return limited;
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const email = String(body.email || '').trim().toLowerCase();
+  const password = String(body.password || '');
+  if (!email || !password) {
+    return NextResponse.json({ error: 'email and password required' }, { status: 400 });
+  }
+
+  const ip = clientIpFrom(req);
+  const ua = req.headers.get('user-agent');
+  const user = await login(email, password);
+  if (!user) {
+    await auditAuth({ event: 'login_fail', email, ip, userAgent: ua });
+    log.info('login fail', { email, ip });
+    return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+  }
+  await auditAuth({ event: 'login_ok', email, ip, userAgent: ua, meta: { userId: user.id } });
+  log.info('login ok', { userId: user.id, email, ip });
   return NextResponse.json({ user });
 }
 
-/** PUT — зарегистрировать первого админа (single-user mode) */
+/**
+ * PUT — регистрация.
+ *   - Если в системе нет ни одного юзера → создаётся первый админ (setup mode).
+ *   - Иначе требуется invite-код (`inviteCode` в body).
+ */
 export async function PUT(req: NextRequest) {
-  const has = await hasAnyUser();
-  if (has) return NextResponse.json({ error: 'Setup already done' }, { status: 409 });
-  const { email, password, name } = await req.json();
-  if (!email || !password || password.length < 6) {
-    return NextResponse.json({ error: 'Email and password (6+ chars) required' }, { status: 400 });
+  const csrfBlocked = await requireCsrf(req);
+  if (csrfBlocked) {
+    await auditAuth({ event: 'csrf_fail', ip: clientIpFrom(req), userAgent: req.headers.get('user-agent') });
+    return csrfBlocked;
   }
-  const user = await register(String(email).trim().toLowerCase(), String(password), name, true);
-  // сразу логиним
-  await login(user.email, String(password));
-  return NextResponse.json({ user });
+  const limited = rateLimit(req, { key: 'signup', max: 3, windowMs: 60_000 });
+  if (limited) {
+    await auditAuth({ event: 'rate_limit', ip: clientIpFrom(req), userAgent: req.headers.get('user-agent'), meta: { route: 'signup' } });
+    return limited;
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const email = String(body.email || '').trim().toLowerCase();
+  const password = String(body.password || '');
+  const name = body.name ? String(body.name).trim() : undefined;
+  const inviteCode = body.inviteCode ? String(body.inviteCode).trim() : undefined;
+
+  if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 });
+  const pwErr = checkPasswordPolicy(password);
+  if (pwErr) return NextResponse.json({ error: pwErr }, { status: 400 });
+
+  const ip = clientIpFrom(req);
+  const ua = req.headers.get('user-agent');
+  const has = await hasAnyUser();
+
+  try {
+    let user;
+    if (!has) {
+      // Setup mode — первый юзер становится админом, без invite.
+      user = await register(email, password, name, true);
+      log.info('setup: first admin created', { userId: user.id, email });
+    } else {
+      // Все остальные — только по приглашению.
+      if (!inviteCode) {
+        return NextResponse.json({ error: 'Нужен invite-код для регистрации' }, { status: 403 });
+      }
+      user = await registerWithInvite(email, password, name, inviteCode);
+      log.info('signup via invite', { userId: user.id, email, inviteCode });
+    }
+    await login(user.email, password);
+    await auditAuth({ event: 'signup', email, ip, userAgent: ua, meta: { userId: user.id, viaInvite: !!inviteCode } });
+    return NextResponse.json({ user });
+  } catch (e) {
+    const msg = (e as Error).message;
+    log.warn('signup failed', { email, ip, err: msg });
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
 }
 
 /** DELETE — logout */
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
+  const csrfBlocked = await requireCsrf(req);
+  if (csrfBlocked) return csrfBlocked;
+  const u = await getAuthUser();
   await logout();
+  if (u) await auditAuth({ event: 'logout', email: u.email, ip: clientIpFrom(req), userAgent: req.headers.get('user-agent'), meta: { userId: u.id } });
   return NextResponse.json({ ok: true });
 }

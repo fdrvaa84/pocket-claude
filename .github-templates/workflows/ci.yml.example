@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build protocol package
+        run: npm run build -w packages/protocol
+
+      - name: Build rfs-mcp package
+        run: npm run build -w packages/rfs-mcp
+
+      - name: Type-check master
+        working-directory: apps/master
+        run: npx tsc --noEmit
+
+      - name: Build master (Next.js)
+        working-directory: apps/master
+        env:
+          # Skip DB-зависимые шаги в build-time (Next 14 prerender check)
+          DATABASE_URL: postgres://stub:stub@localhost:5432/stub
+          NODE_ENV: production
+        run: npm run build
+
+      - name: Build agent
+        run: npm run build -w apps/agent
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck on installer + scripts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck -s bash apps/master/public/connect.sh apps/master/scripts/*.sh || true
