@@ -306,10 +306,18 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
   }
 
   function submitPasteModal(): void {
-    if (pasteText) {
-      const ok = sendKey(pasteText);
-      if (!ok) { alert('Не удалось отправить в терминал — WebSocket закрыт'); return; }
+    if (!pasteText) { setPasteModalOpen(false); return; }
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      alert(`❌ Не отправилось: WebSocket ${ws ? `state=${ws.readyState}` : 'null'}\n\nТекст остался в буфере модалки. Закрой модалку и открой PTY заново (сессия могла отвалиться).`);
+      return;
     }
+    const ok = sendKey(pasteText);
+    if (!ok) {
+      alert('❌ sendKey вернул false — не отправилось');
+      return;
+    }
+    // Успех — закрываем модалку
     setPasteModalOpen(false);
     setPasteText('');
   }
@@ -436,22 +444,40 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
                            : 'Long-press в поле ниже → «Paste» в iOS-меню'}
               </div>
             </div>
-            <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)}
+            <textarea value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              onInput={(e) => setPasteText((e.target as HTMLTextAreaElement).value)}
+              onPaste={(e) => {
+                // Ручной хэндлер: react onChange иногда не ловит paste на iOS
+                const t = e.clipboardData?.getData('text');
+                if (t) {
+                  e.preventDefault();
+                  setPasteText(t);
+                }
+              }}
               autoFocus rows={4}
-              placeholder="сюда вставить скопированный текст…"
+              placeholder="long-press здесь → Paste"
               spellCheck={false} autoCapitalize="off" autoCorrect="off"
               className="w-full px-3 py-2 rounded-lg text-[15px] bg-transparent outline-none font-mono"
               style={{ border: '1px solid var(--border)', color: 'var(--fg)' }} />
+            {pasteText && (
+              <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
+                будет отправлено: <b>{pasteText.length}</b> символов
+              </div>
+            )}
             <div className="flex gap-2">
               <button onClick={() => setPasteModalOpen(false)}
                 className="flex-1 px-4 py-2.5 rounded-xl text-[14px]"
                 style={{ background: 'var(--surface-2)', color: 'var(--fg-2)' }}>
                 Отмена
               </button>
-              <button onClick={submitPasteModal} disabled={!pasteText}
-                className="flex-1 px-4 py-2.5 rounded-xl text-[14px] font-semibold disabled:opacity-40"
-                style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
-                Вставить ↵
+              <button onClick={submitPasteModal}
+                className="flex-1 px-4 py-2.5 rounded-xl text-[14px] font-semibold"
+                style={{
+                  background: pasteText ? 'var(--accent)' : 'var(--surface-2)',
+                  color: pasteText ? 'var(--bg)' : 'var(--muted)',
+                }}>
+                Вставить ↵ {pasteText ? `(${pasteText.length})` : ''}
               </button>
             </div>
           </div>
