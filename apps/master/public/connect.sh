@@ -57,16 +57,76 @@ cat > "$DIR/config.json" <<EOF
 EOF
 chmod 600 "$DIR/config.json"
 
-# Run a quick test (5 sec)
-echo ">> Testing connection (5s)..."
-timeout 5 node "$DIR/agent.js" || true
+# ================================================================
+# Опционально: node-pty для полноценного PTY-терминала (vim/htop).
+# Без него агент работает, просто PTY-режим в UI покажет инструкцию.
+# ================================================================
+OS=$(uname -s)
+install_node_pty() {
+  if node -e "require('node-pty')" 2>/dev/null; then
+    echo "   node-pty уже установлен — ok"
+    return 0
+  fi
+  echo ">> Пробую установить node-pty (для vim/htop/интерактивных команд)..."
+  # Ставим build-tools для компиляции native addon
+  if [[ "$OS" == "Linux" ]]; then
+    if command -v apt-get >/dev/null 2>&1 && [[ $EUID -eq 0 ]]; then
+      apt-get install -y build-essential python3 >/dev/null 2>&1 || true
+    elif command -v yum >/dev/null 2>&1 && [[ $EUID -eq 0 ]]; then
+      yum groupinstall -y 'Development Tools' >/dev/null 2>&1 || true
+      yum install -y python3 >/dev/null 2>&1 || true
+    fi
+  fi
+  if [[ $EUID -eq 0 ]] || [[ "$OS" == "Darwin" ]]; then
+    if npm install -g node-pty >/dev/null 2>&1; then
+      echo "   ✓ node-pty установлен глобально"
+    else
+      echo "   ⚠ node-pty не установлен — PTY в UI покажет инструкцию"
+      echo "     руками: sudo npm install -g node-pty"
+    fi
+  else
+    echo "   ⚠ не root — не могу поставить node-pty глобально"
+    echo "     руками: sudo npm install -g node-pty"
+  fi
+}
+install_node_pty
 
 # Install service
-OS=$(uname -s)
 if [[ "$OS" == "Linux" ]]; then
-  UNIT="$HOME/.config/systemd/user/pocket-claude-agent.service"
-  mkdir -p "$(dirname "$UNIT")"
-  cat > "$UNIT" <<EOF
+  # Под root ставим system-unit с лимитами и auto-restart.
+  if [[ $EUID -eq 0 ]]; then
+    UNIT="/etc/systemd/system/pocket-claude-agent.service"
+    cat > "$UNIT" <<EOF
+[Unit]
+Description=Pocket Claude Agent (node-pty + WebSocket)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$DIR
+Environment=NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules
+ExecStart=$(which node) $DIR/agent.js
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+MemoryMax=512M
+TasksMax=200
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload
+    systemctl enable --now pocket-claude-agent
+    echo "✓ systemd system service: pocket-claude-agent"
+    echo "  logs: journalctl -u pocket-claude-agent -f"
+  else
+    # Non-root — user-scope (работает пока юзер залогинен или linger включён)
+    UNIT="$HOME/.config/systemd/user/pocket-claude-agent.service"
+    mkdir -p "$(dirname "$UNIT")"
+    cat > "$UNIT" <<EOF
 [Unit]
 Description=Pocket Claude Agent
 After=network-online.target
@@ -79,10 +139,12 @@ RestartSec=5
 [Install]
 WantedBy=default.target
 EOF
-  systemctl --user daemon-reload
-  systemctl --user enable --now pocket-claude-agent
-  echo "✓ systemd user service: pocket-claude-agent"
-  echo "  logs: journalctl --user -u pocket-claude-agent -f"
+    systemctl --user daemon-reload
+    systemctl --user enable --now pocket-claude-agent
+    echo "✓ systemd user service: pocket-claude-agent"
+    echo "  logs: journalctl --user -u pocket-claude-agent -f"
+    echo "  (для auto-start при reboot без логина: sudo loginctl enable-linger $USER)"
+  fi
 elif [[ "$OS" == "Darwin" ]]; then
   PLIST="$HOME/Library/LaunchAgents/dev.pocket-claude.agent.plist"
   NODE=$(which node)
@@ -109,14 +171,22 @@ else
   echo "  node $DIR/agent.js"
 fi
 
+# Uninstaller
 cat > "$DIR/uninstall.sh" <<EOF
 #!/usr/bin/env bash
 set -e
-if [[ "\$(uname -s)" == "Linux" ]]; then
-  systemctl --user disable --now pocket-claude-agent 2>/dev/null || true
-  rm -f "$HOME/.config/systemd/user/pocket-claude-agent.service"
-  systemctl --user daemon-reload
-elif [[ "\$(uname -s)" == "Darwin" ]]; then
+OS=\$(uname -s)
+if [[ "\$OS" == "Linux" ]]; then
+  if [[ \$EUID -eq 0 ]] && [[ -f /etc/systemd/system/pocket-claude-agent.service ]]; then
+    systemctl disable --now pocket-claude-agent 2>/dev/null || true
+    rm -f /etc/systemd/system/pocket-claude-agent.service
+    systemctl daemon-reload
+  else
+    systemctl --user disable --now pocket-claude-agent 2>/dev/null || true
+    rm -f "$HOME/.config/systemd/user/pocket-claude-agent.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+  fi
+elif [[ "\$OS" == "Darwin" ]]; then
   launchctl unload "$HOME/Library/LaunchAgents/dev.pocket-claude.agent.plist" 2>/dev/null || true
   rm -f "$HOME/Library/LaunchAgents/dev.pocket-claude.agent.plist"
 fi

@@ -228,10 +228,19 @@ function onClientPtyConnect(
     return;
   }
 
+  // Heartbeat наш-клиенту чтобы nginx не рвал тихий коннект (proxy_read_timeout 300s).
+  // Клиент тоже шлёт __ping — мы его игнорируем, но сам факт трафика держит коннект живым.
+  const heartbeat = setInterval(() => {
+    if (closed || ws.readyState !== WebSocket.OPEN) return;
+    try { ws.send(JSON.stringify({ type: '__ping' })); } catch {}
+  }, 45_000);
+
   ws.on('message', (raw: Buffer) => {
     let msg: any;
     try { msg = JSON.parse(raw.toString('utf8')); } catch { return; }
     if (!msg || typeof msg.type !== 'string') return;
+    // Heartbeat — молча игнорируем.
+    if (msg.type === '__ping' || msg.type === '__pong') return;
     // Перезаписываем correlation_id (клиент не должен его выдумывать).
     msg.correlation_id = cid;
     if (msg.type === 'pty.data') {
@@ -246,6 +255,7 @@ function onClientPtyConnect(
   const cleanup = () => {
     if (closed) return;
     closed = true;
+    clearInterval(heartbeat);
     // Сообщаем агенту: клиент ушёл — убей shell
     try {
       const closeMsg: PtyCloseMessage = { type: 'pty.close', correlation_id: cid };

@@ -103,7 +103,14 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
       wsRef.current = ws;
 
       ws.onopen = () => {
-        // ждём pty.opened от агента
+        // Heartbeat — раз в 45s шлём ws-ping. Нужно чтобы nginx (proxy_read_timeout 300s)
+        // не рвал тихий коннект (когда пользователь открыл терминал и не трогает).
+        const pingTimer = setInterval(() => {
+          if (!ws || ws.readyState !== WebSocket.OPEN) { clearInterval(pingTimer); return; }
+          try { ws.send(JSON.stringify({ type: '__ping' })); } catch {}
+        }, 45_000);
+        // Stash для очистки при destroy
+        (ws as any).__pingTimer = pingTimer;
       };
 
       ws.onmessage = (ev) => {
@@ -181,6 +188,10 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
     return () => {
       destroyed = true;
       try { resizeObs?.disconnect(); } catch {}
+      try {
+        const t = (ws as any)?.__pingTimer;
+        if (t) clearInterval(t);
+      } catch {}
       try { ws?.close(); } catch {}
       try { term?.dispose(); } catch {}
       termRef.current = null;
