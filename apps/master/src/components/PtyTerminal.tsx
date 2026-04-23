@@ -182,6 +182,25 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
         }
       });
 
+      // Cmd+V / Ctrl+V — читаем clipboard и шлём. Перехватываем keyEvent до того
+      // как xterm интерпретирует его как обычный ввод литерала 'v'.
+      term.attachCustomKeyEventHandler((ev) => {
+        if (ev.type !== 'keydown') return true;
+        const isPaste =
+          (ev.key === 'v' || ev.key === 'V') &&
+          (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && !ev.altKey;
+        if (!isPaste) return true;
+        navigator.clipboard.readText().then((text) => {
+          if (text && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'pty.data',
+              data: btoa(unescape(encodeURIComponent(text))),
+            }));
+          }
+        }).catch(() => {});
+        return false;
+      });
+
       // Отправка resize на сервер когда terminal меняет размер
       let lastSize = `${term.cols}x${term.rows}`;
       term.onResize(({ cols, rows }) => {
@@ -241,6 +260,21 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
     setCtrlArmed(false);
   }
 
+  /**
+   * Читает системный clipboard и шлёт содержимое в PTY.
+   * Требует HTTPS + user gesture — поэтому вызываем из onClick, а не автоматом.
+   * В iOS Safari тап по кнопке = user gesture, читать разрешено.
+   */
+  async function pasteFromClipboard(): Promise<void> {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) sendKey(text);
+    } catch (e) {
+      // Safari в приватном режиме или старый браузер — просим юзера ручной fallback
+      alert('Не могу прочитать буфер обмена. Попробуй long-press на поле ввода (snackbar iOS)\nили вставь в другую мини-форму и оттуда.');
+    }
+  }
+
   return (
     <div className="flex flex-col h-full" style={{ background: '#0a0a0a', color: '#e5e7eb' }}>
       {/* Toolbar */}
@@ -258,12 +292,20 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
         </span>
         <div className="flex-1" />
         {status === 'ready' && (
-          <button type="button" onClick={() => sendKey('\x03')}
-            title="Прервать выполняющуюся команду (Ctrl+C)"
-            className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
-            style={{ color: '#fca5a5', border: '1px solid #262626' }}>
-            Ctrl+C
-          </button>
+          <>
+            <button type="button" onClick={pasteFromClipboard}
+              title="Вставить из буфера обмена"
+              className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
+              style={{ color: '#d4d4aa', border: '1px solid #262626' }}>
+              📋 Paste
+            </button>
+            <button type="button" onClick={() => sendKey('\x03')}
+              title="Прервать выполняющуюся команду (Ctrl+C)"
+              className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
+              style={{ color: '#fca5a5', border: '1px solid #262626' }}>
+              Ctrl+C
+            </button>
+          </>
         )}
       </div>
 
@@ -293,6 +335,8 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
             </>
           ) : (
             <>
+              <KeyBtn label="📋" onClick={pasteFromClipboard}
+                title="Вставить из буфера обмена" />
               <KeyBtn label="↑" onClick={() => sendKey('\x1b[A')} />
               <KeyBtn label="↓" onClick={() => sendKey('\x1b[B')} />
               <KeyBtn label="←" onClick={() => sendKey('\x1b[D')} />
