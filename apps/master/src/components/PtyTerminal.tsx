@@ -338,41 +338,38 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
               : status === 'error' ? 'error' : 'closed'}
         </span>
         <div className="flex-1" />
-        {status === 'ready' && (
-          <>
-            {/* Scroll buttons — xterm на мобиле плохо скроллится пальцем, даём явные кнопки */}
-            <button type="button" onClick={() => scrollBy(-5)}
-              title="Вверх по истории"
-              className="font-mono text-[14px] w-7 h-7 rounded hover:bg-[#1a1a1a]"
-              style={{ color: '#d4d4aa', border: '1px solid #262626', lineHeight: '1' }}>
-              ↑
-            </button>
-            <button type="button" onClick={() => scrollBy(5)}
-              title="Вниз по истории"
-              className="font-mono text-[14px] w-7 h-7 rounded hover:bg-[#1a1a1a]"
-              style={{ color: '#d4d4aa', border: '1px solid #262626', lineHeight: '1' }}>
-              ↓
-            </button>
-            <button type="button" onClick={pasteFromClipboard}
-              title="Вставить из буфера обмена"
-              className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
-              style={{ color: '#d4d4aa', border: '1px solid #262626' }}>
-              📋 Paste
-            </button>
-            <button type="button" onClick={() => sendKey('\r')}
-              title="Enter"
-              className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
-              style={{ color: '#d4d4aa', border: '1px solid #262626' }}>
-              ↵
-            </button>
-            <button type="button" onClick={() => sendKey('\x03')}
-              title="Прервать выполняющуюся команду (Ctrl+C)"
-              className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
-              style={{ color: '#fca5a5', border: '1px solid #262626' }}>
-              Ctrl+C
-            </button>
-          </>
-        )}
+        {/* Всегда доступные: скролл истории (не требует открытой PTY) */}
+        <button type="button" onClick={() => scrollBy(-5)}
+          title="Вверх по истории"
+          className="font-mono text-[14px] w-7 h-7 rounded hover:bg-[#1a1a1a]"
+          style={{ color: '#d4d4aa', border: '1px solid #262626', lineHeight: '1' }}>
+          ↑
+        </button>
+        <button type="button" onClick={() => scrollBy(5)}
+          title="Вниз по истории"
+          className="font-mono text-[14px] w-7 h-7 rounded hover:bg-[#1a1a1a]"
+          style={{ color: '#d4d4aa', border: '1px solid #262626', lineHeight: '1' }}>
+          ↓
+        </button>
+        {/* Paste — полезна как только WS открыт */}
+        <button type="button" onClick={pasteFromClipboard}
+          title="Вставить из буфера обмена"
+          className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
+          style={{ color: '#d4d4aa', border: '1px solid #262626' }}>
+          📋 Paste
+        </button>
+        <button type="button" onClick={() => sendKey('\r')}
+          title="Enter"
+          className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
+          style={{ color: '#d4d4aa', border: '1px solid #262626' }}>
+          ↵
+        </button>
+        <button type="button" onClick={() => sendKey('\x03')}
+          title="Прервать выполняющуюся команду (Ctrl+C)"
+          className="font-mono text-[11px] px-2 py-1 rounded hover:bg-[#1a1a1a]"
+          style={{ color: '#fca5a5', border: '1px solid #262626' }}>
+          Ctrl+C
+        </button>
       </div>
 
       {/* Xterm host */}

@@ -153,12 +153,15 @@ export default function ClaudeLoginModal({ deviceId, deviceName, onClose }: Prop
               </ol>
             </details>
 
-            {/* PTY во весь экран модалки — как было изначально */}
+            {/* PTY во весь экран модалки — как было изначально.
+                mobileBar=true принудительно: в модалке всегда показываем
+                управление (Enter/стрелки/цифры/🔤) независимо от размеров окна. */}
             <div className="flex-1 min-h-0">
               <PtyTerminal
                 deviceId={deviceId}
                 deviceName={deviceName}
                 initialCommand="claude /login"
+                mobileBar={true}
                 onExit={onClose}
               />
             </div>
