@@ -1,0 +1,45 @@
+# Dependencies & build artifacts
+node_modules/
+.next/
+dist/
+build/
+*.tsbuildinfo
+
+# Env (никогда не коммитим секреты)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Claude Code / agentic-flow auto-generated
+.claude/
+.claude-flow/
+.swarm/
+.hive-mind/
+.mcp.json
+CLAUDE.md.bak
+ruvector.db
+
+# Runtime data / job buffers
+data/
+jobs/
+*.sqlite
+
+# Master: собранный в /public агент для install
+apps/master/public/agent.js
+apps/master/public/agent-v*.js
+
+# Agent distrib
+apps/agent/dist/
