@@ -45,6 +45,7 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
   /** Список найденных в буфере URL'ов (auto-detected). */
   const [urls, setUrls] = useState<string[]>([]);
   const [urlCopied, setUrlCopied] = useState<string | null>(null);
+  const rawBufferRef = useRef<string>('');
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -68,18 +69,47 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
     const appendRaw = (chunk: string) => {
       rawBuffer += chunk;
       if (rawBuffer.length > 32_000) rawBuffer = rawBuffer.slice(-32_000);
+      // Также пишем в ref чтобы Debug-кнопка из toolbar могла прочесть
+      rawBufferRef.current = rawBuffer;
     };
 
     const extractUrls = (): string[] => {
-      // Стрипаем ANSI escape: \x1b[...m, \x1b]...\x07, и просто \x1b[X
+      // Стрипаем ANSI escape: OSC \x1b]...\x07, CSI \x1b[...m и др.
       const stripped = rawBuffer
         .replace(/\u001b\][^\u0007]*\u0007/g, '')
-        .replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '');
-      // URL может содержать почти всё кроме whitespace/кавычек/`<>` — без принудительного break по \n,
-      // т.к. claude НЕ ставит перевод строки внутри URL (это делает только xterm при отрисовке).
-      const matches = [...stripped.matchAll(/https?:\/\/[^\s"'<>`]+/g)].map(m => m[0]);
-      const cleaned = matches.map(u => u.replace(/[.,;:)\]}]+$/, ''));
-      return Array.from(new Set(cleaned)).slice(-5);
+        .replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '')
+        // \r без \n считаем за \n, чтобы wrap-маркеры PTY стали обычным split'ом
+        .replace(/\r\n?/g, '\n');
+
+      // Smart-склейка строк: если строка кончается на не-whitespace
+      // и следующая начинается с типичного URL-символа (alphanumeric, &, =, /, etc) —
+      // это продолжение URL'а, разорванного для красоты.
+      const lines = stripped.split('\n');
+      const joined: string[] = lines[0] != null ? [lines[0]] : [];
+      for (let i = 1; i < lines.length; i++) {
+        const prev = joined[joined.length - 1] || '';
+        const cur = lines[i];
+        const curTrim = cur.replace(/^\s+/, '');
+        // Если предыдущая строка кончается на URL-окончание (буква, цифра, &=?/-_.~%+),
+        // и эта начинается тоже с такого символа — склеиваем без \n
+        const prevEndsUrl = /[a-zA-Z0-9&=?_/\-.~%+]$/.test(prev);
+        const curStartsUrl = /^[a-zA-Z0-9&=?_/\-.~%+]/.test(curTrim);
+        if (prevEndsUrl && curStartsUrl && prev.length > 0) {
+          joined[joined.length - 1] = prev + curTrim;
+        } else {
+          joined.push(cur);
+        }
+      }
+      const fullText = joined.join('\n');
+
+      // Теперь URL целостный. Ищем стандартным regex'ом.
+      const matches = [...fullText.matchAll(/https?:\/\/[^\s"'<>`]+/g)].map(m => m[0]);
+      // Режем хвостовые знаки пунктуации.
+      const cleaned = matches.map(u => u.replace(/[.,;:)\]}!?]+$/, ''));
+      // Дополнительно фильтруем — пускаем только URL содержащие "?" или достаточно длинные
+      // (короткий "https://x.y" может быть кусок текста)
+      const filtered = cleaned.filter(u => u.length > 20);
+      return Array.from(new Set(filtered)).slice(-5);
     };
 
     const scheduleUrlScan = () => {
@@ -417,18 +447,36 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
           style={{ color: '#fca5a5', border: '1px solid #262626' }}>
           Ctrl+C
         </button>
+        {/* Debug: скопировать сырой буфер от PTY (ANSI-стрипнутый) для дебага URL-парсера */}
+        <button type="button" onClick={async () => {
+            const raw = rawBufferRef.current
+              .replace(/\u001b\][^\u0007]*\u0007/g, '')
+              .replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '')
+              .replace(/\r\n?/g, '\n');
+            const last = raw.slice(-2000);
+            try { await navigator.clipboard.writeText(last); alert(`Скопирован raw-буфер (${last.length} символов) в clipboard. Вставь в чат если URL не парсится.`); }
+            catch { alert(last); }
+          }}
+          title="Скопировать сырой вывод PTY (debug URL parser)"
+          className="font-mono text-[11px] px-1.5 py-1 rounded hover:bg-[#1a1a1a]"
+          style={{ color: '#9ca3af', border: '1px solid #262626' }}>
+          🐞
+        </button>
       </div>
 
       {/* Auto-detected URLs — для случаев типа claude /login, где URL в выводе
-          разрывается xterm'овским soft-wrap'ом и WebLinksAddon не может его склеить.
-          Показываем кликабельные кнопки «Открыть» / «Копировать». */}
+          разрывается xterm'овским soft-wrap'ом и WebLinksAddon не может его склеить. */}
       {urls.length > 0 && (
-        <div className="shrink-0 px-2 py-1.5 flex flex-col gap-1 max-h-[80px] overflow-y-auto"
+        <div className="shrink-0 px-2 py-1.5 flex flex-col gap-1 max-h-[120px] overflow-y-auto"
           style={{ background: '#1a1a0a', borderBottom: '1px solid #262626' }}>
           {urls.map((url) => (
             <div key={url} className="flex items-center gap-1.5">
-              <span className="font-mono text-[10.5px] truncate flex-1" style={{ color: '#d4d4aa' }}>
+              <span className="font-mono text-[10.5px] truncate flex-1" style={{ color: '#d4d4aa' }}
+                title={url}>
                 🔗 {url}
+              </span>
+              <span className="shrink-0 font-mono text-[9.5px] opacity-60" style={{ color: '#d4d4aa' }}>
+                {url.length}c
               </span>
               <button type="button"
                 onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
