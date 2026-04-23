@@ -74,42 +74,65 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
     };
 
     const extractUrls = (): string[] => {
-      // Стрипаем ANSI escape: OSC \x1b]...\x07, CSI \x1b[...m и др.
+      // Стрипаем ANSI escape во всех вариантах:
       const stripped = rawBuffer
-        .replace(/\u001b\][^\u0007]*\u0007/g, '')
-        .replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '')
-        // \r без \n считаем за \n, чтобы wrap-маркеры PTY стали обычным split'ом
+        // OSC (Operating System Command): \x1b]…\x07 или \x1b]…\x1b\\
+        .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
+        // CSI (Control Sequence Introducer): \x1b[…любая_буква
+        .replace(/\u001b\[[0-9;?<>!]*[a-zA-Z]/g, '')
+        // ESC + одиночный символ (charset, keypad, save/restore cursor и т.п.)
+        .replace(/\u001b[()*+\-./][a-zA-Z0-9]/g, '')
+        .replace(/\u001b[=>]/g, '')
+        // DCS \x1bP…\x1b\\
+        .replace(/\u001bP[^\u001b]*\u001b\\/g, '')
+        // Все остальные control-chars кроме \t \n \r
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+        // \r без \n считаем за \n
         .replace(/\r\n?/g, '\n');
 
-      // Smart-склейка строк: если строка кончается на не-whitespace
-      // и следующая начинается с типичного URL-символа (alphanumeric, &, =, /, etc) —
-      // это продолжение URL'а, разорванного для красоты.
+      // Идём по строкам. Как только встретили строку с https:// —
+      // начинаем собирать URL. Склеиваем все последующие строки, которые
+      // состоят ТОЛЬКО из URL-валидных символов (без пробелов), до первого
+      // пробела/пустой строки/переноса.
+      const URL_CHAR = /^[a-zA-Z0-9\-_.~!*'();:@&=+$,/?#%[\]]+$/;
       const lines = stripped.split('\n');
-      const joined: string[] = lines[0] != null ? [lines[0]] : [];
-      for (let i = 1; i < lines.length; i++) {
-        const prev = joined[joined.length - 1] || '';
-        const cur = lines[i];
-        const curTrim = cur.replace(/^\s+/, '');
-        // Если предыдущая строка кончается на URL-окончание (буква, цифра, &=?/-_.~%+),
-        // и эта начинается тоже с такого символа — склеиваем без \n
-        const prevEndsUrl = /[a-zA-Z0-9&=?_/\-.~%+]$/.test(prev);
-        const curStartsUrl = /^[a-zA-Z0-9&=?_/\-.~%+]/.test(curTrim);
-        if (prevEndsUrl && curStartsUrl && prev.length > 0) {
-          joined[joined.length - 1] = prev + curTrim;
-        } else {
-          joined.push(cur);
+      const collected: string[] = [];
+      let current: string | null = null;
+
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (current) {
+          // Продолжение? Только если строка не пустая, без пробелов внутри, вся из URL-символов
+          if (line && !/\s/.test(line) && URL_CHAR.test(line)) {
+            current += line;
+            continue;
+          }
+          // Конец URL — сохраняем и смотрим нет ли в этой же строке нового https://
+          collected.push(current);
+          current = null;
+        }
+        // Ищем https:// в текущей строке
+        const idx = line.search(/https?:\/\//);
+        if (idx >= 0) {
+          // Отрезаем хвост строки с места где начинается https, до первого пробела
+          const tail = line.slice(idx);
+          const spaceIdx = tail.search(/\s/);
+          const urlStart = spaceIdx >= 0 ? tail.slice(0, spaceIdx) : tail;
+          current = urlStart;
+          // Если в строке после URL был пробел — URL закончился прямо в этой строке
+          if (spaceIdx >= 0) {
+            collected.push(current);
+            current = null;
+          }
         }
       }
-      const fullText = joined.join('\n');
+      if (current) collected.push(current);
 
-      // Теперь URL целостный. Ищем стандартным regex'ом.
-      const matches = [...fullText.matchAll(/https?:\/\/[^\s"'<>`]+/g)].map(m => m[0]);
-      // Режем хвостовые знаки пунктуации.
-      const cleaned = matches.map(u => u.replace(/[.,;:)\]}!?]+$/, ''));
-      // Дополнительно фильтруем — пускаем только URL содержащие "?" или достаточно длинные
-      // (короткий "https://x.y" может быть кусок текста)
-      const filtered = cleaned.filter(u => u.length > 20);
-      return Array.from(new Set(filtered)).slice(-5);
+      // Чистим хвостовые знаки пунктуации, фильтруем короткие, дедуплицируем.
+      const cleaned = collected
+        .map(u => u.replace(/[.,;:)\]}!?]+$/, ''))
+        .filter(u => /^https?:\/\//.test(u) && u.length > 20);
+      return Array.from(new Set(cleaned)).slice(-5);
     };
 
     const scheduleUrlScan = () => {
