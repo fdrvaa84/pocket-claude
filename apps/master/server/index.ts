@@ -148,9 +148,13 @@ function onAgentConnect(ws: WebSocket, device: { id: string; user_id: string; na
       query(
         `UPDATE pc.devices
          SET hostname=$1, os=$2, arch=$3, capabilities=$4::jsonb, last_version=$5,
-             claude_logged_in=$6, last_online=NOW()
-         WHERE id=$7`,
-        [h.hostname, h.os, h.arch, JSON.stringify(h.capabilities), h.version, h.claude.logged_in, device.id],
+             claude_logged_in=$6, claude_installed=$7, claude_version=$8, last_online=NOW()
+         WHERE id=$9`,
+        [
+          h.hostname, h.os, h.arch, JSON.stringify(h.capabilities), h.version,
+          h.claude.logged_in, h.claude.installed, h.claude.version ?? null,
+          device.id,
+        ],
       ).catch(() => {});
       ws.send(JSON.stringify({ type: 'hello.ack', server_time: new Date().toISOString(), protocol: PROTOCOL_VERSION }));
       return;

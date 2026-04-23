@@ -20,11 +20,16 @@ interface Props {
   /** Показывать мобильный бар с Ctrl/Esc/Tab/стрелками. Если undefined — авто по ширине. */
   mobileBar?: boolean;
   onExit?: () => void;
+  /**
+   * Если задано — сразу после открытия сессии шлём эти байты + '\n'.
+   * Используется для авто-запуска `claude auth login` в модалке логина.
+   */
+  initialCommand?: string;
 }
 
 type Status = 'connecting' | 'ready' | 'error' | 'closed';
 
-export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onExit }: Props) {
+export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onExit, initialCommand }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddonT | null>(null);
@@ -120,6 +125,19 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
           if (m.type === 'pty.opened') {
             setStatus('ready');
             term!.focus();
+            // Авто-запуск начальной команды (например, `claude auth login`).
+            // Небольшая задержка чтобы shell успел отрисовать prompt.
+            if (initialCommand && ws && ws.readyState === WebSocket.OPEN) {
+              setTimeout(() => {
+                try {
+                  const cmd = initialCommand + '\n';
+                  ws!.send(JSON.stringify({
+                    type: 'pty.data',
+                    data: btoa(unescape(encodeURIComponent(cmd))),
+                  }));
+                } catch {}
+              }, 300);
+            }
           } else if (m.type === 'pty.data') {
             const raw = atob(m.data);
             // byte-safe UTF-8 decode
@@ -198,7 +216,7 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
       fitRef.current = null;
       wsRef.current = null;
     };
-  }, [deviceId, cwd]);
+  }, [deviceId, cwd, initialCommand]);
 
   // Уведомление наружу когда сессия закрылась (для UI, например переход назад).
   useEffect(() => {

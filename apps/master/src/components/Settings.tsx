@@ -1,13 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import DeviceBrowser from './DeviceBrowser';
 import { effectiveIntent, type DeviceIntent } from '@/lib/device-intent';
+
+const ClaudeInstallModal = dynamic(() => import('./ClaudeInstallModal'), { ssr: false, loading: () => null });
+const ClaudeLoginModal = dynamic(() => import('./ClaudeLoginModal'), { ssr: false, loading: () => null });
 
 interface User { id: string; email: string; name: string | null }
 interface Device {
   id: string; name: string; kind: string; hostname: string | null;
   os?: string | null; arch?: string | null; online: boolean; claude_logged_in: boolean | null;
+  claude_installed?: boolean | null;
+  claude_version?: string | null;
   last_online: string | null; root_path: string | null;
   intent?: DeviceIntent | null;
 }
@@ -27,6 +33,8 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
   const [browseDevice, setBrowseDevice] = useState<Device | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editRootFor, setEditRootFor] = useState<Device | null>(null);
+  const [installFor, setInstallFor] = useState<Device | null>(null);
+  const [loginFor, setLoginFor] = useState<Device | null>(null);
 
   async function deleteDevice(id: string) {
     if (!confirm('Отключить устройство? Агент потеряет токен.')) return;
@@ -84,11 +92,68 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
             <div className="text-[11px] font-mono truncate" style={{ color: 'var(--muted)' }}>
               {d.hostname || d.id.slice(0, 8)}{d.os ? ` · ${d.os}/${d.arch}` : ''} · {intentLabel}
             </div>
-            {role === 'claude' && d.online && d.claude_logged_in === false && (
-              <div className="text-[11px]" style={{ color: 'var(--danger)' }}>
-                ⚠ на устройстве не сделан `claude login`
-              </div>
-            )}
+            {/* Claude-статус: installed + logged_in. Кнопки «Установить» / «Войти» */}
+            {role === 'claude' && d.online && (() => {
+              const installed = d.claude_installed === true;
+              const legacyKnown = d.claude_installed == null; // старый agent не репортил installed
+              const loggedIn = d.claude_logged_in === true;
+              if (installed && loggedIn) {
+                return (
+                  <div className="text-[11px] flex items-center gap-1" style={{ color: 'var(--ok)' }}>
+                    ✓ Claude {d.claude_version ? `v${d.claude_version}` : ''} · авторизован
+                  </div>
+                );
+              }
+              if (installed && !loggedIn) {
+                return (
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-[11px]" style={{ color: 'var(--warn)' }}>
+                      ⚠ Claude {d.claude_version ? `v${d.claude_version}` : ''} · не авторизован
+                    </span>
+                    <button onClick={(e) => { e.stopPropagation(); setLoginFor(d); }}
+                      className="text-[10.5px] px-2 py-0.5 rounded-full"
+                      style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
+                      🔐 Войти
+                    </button>
+                  </div>
+                );
+              }
+              if (d.claude_installed === false) {
+                return (
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-[11px]" style={{ color: 'var(--danger)' }}>
+                      ❌ Claude не установлен
+                    </span>
+                    <button onClick={(e) => { e.stopPropagation(); setInstallFor(d); }}
+                      className="text-[10.5px] px-2 py-0.5 rounded-full"
+                      style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
+                      📥 Установить
+                    </button>
+                  </div>
+                );
+              }
+              // legacyKnown: старый агент только сказал logged_in=false — не знаем installed ли
+              if (legacyKnown && !loggedIn) {
+                return (
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-[11px]" style={{ color: 'var(--warn)' }}>
+                      ⚠ нет `claude login` (статус установки неизвестен)
+                    </span>
+                    <button onClick={(e) => { e.stopPropagation(); setLoginFor(d); }}
+                      className="text-[10.5px] px-2 py-0.5 rounded-full"
+                      style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
+                      🔐 Войти
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); setInstallFor(d); }}
+                      className="text-[10.5px] px-2 py-0.5 rounded-full"
+                      style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                      📥 Установить
+                    </button>
+                  </div>
+                );
+              }
+              return null;
+            })()}
             {d.root_path && (
               <div className="text-[11px] font-mono truncate mt-0.5" style={{ color: 'var(--muted)' }}>
                 корень: {d.root_path}
@@ -233,6 +298,23 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
           </div>
         </div>
       </div>
+
+      {/* Claude install / login modals */}
+      {installFor && (
+        <ClaudeInstallModal
+          deviceId={installFor.id}
+          deviceName={installFor.name}
+          onClose={() => { setInstallFor(null); onReload(); }}
+          onInstalled={() => onReload()}
+        />
+      )}
+      {loginFor && (
+        <ClaudeLoginModal
+          deviceId={loginFor.id}
+          deviceName={loginFor.name}
+          onClose={() => { setLoginFor(null); onReload(); }}
+        />
+      )}
     </div>
   );
 }
