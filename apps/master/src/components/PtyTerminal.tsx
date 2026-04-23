@@ -61,30 +61,25 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
     let resizeObs: ResizeObserver | null = null;
     let urlScanTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // Извлекает URL'ы из текущего буфера xterm с учётом soft-wrap'a.
-    // xterm разрывает длинные URLы через перенос строки — собираем их обратно.
+    /** Сырой текстовый буфер последних ~32KB от PTY (до того как xterm wrap'нул).
+     *  В нём URL приходит как **одна строка** — никаких visual-line-break'ов нет.
+     *  ANSI escape-коды стрипаем regex'ом перед поиском. */
+    let rawBuffer = '';
+    const appendRaw = (chunk: string) => {
+      rawBuffer += chunk;
+      if (rawBuffer.length > 32_000) rawBuffer = rawBuffer.slice(-32_000);
+    };
+
     const extractUrls = (): string[] => {
-      if (!term) return [];
-      const buf = term.buffer.active;
-      const lines: string[] = [];
-      const total = Math.min(buf.length, 200); // последние 200 строк хватит
-      const startIdx = buf.length - total;
-      for (let i = startIdx; i < buf.length; i++) {
-        const line = buf.getLine(i);
-        if (!line) continue;
-        const text = line.translateToString(true);
-        if (i > startIdx && line.isWrapped) {
-          // Soft-wrap — это продолжение предыдущей логической строки
-          lines[lines.length - 1] += text;
-        } else {
-          lines.push(text);
-        }
-      }
-      const fullText = lines.join('\n');
-      const matches = [...fullText.matchAll(/https?:\/\/[^\s\u001b\u0007"'<>`]+/g)].map(m => m[0]);
-      // Убираем дубликаты, режем хвостовые знаки пунктуации
+      // Стрипаем ANSI escape: \x1b[...m, \x1b]...\x07, и просто \x1b[X
+      const stripped = rawBuffer
+        .replace(/\u001b\][^\u0007]*\u0007/g, '')
+        .replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '');
+      // URL может содержать почти всё кроме whitespace/кавычек/`<>` — без принудительного break по \n,
+      // т.к. claude НЕ ставит перевод строки внутри URL (это делает только xterm при отрисовке).
+      const matches = [...stripped.matchAll(/https?:\/\/[^\s"'<>`]+/g)].map(m => m[0]);
       const cleaned = matches.map(u => u.replace(/[.,;:)\]}]+$/, ''));
-      return Array.from(new Set(cleaned)).slice(-5); // максимум 5 последних
+      return Array.from(new Set(cleaned)).slice(-5);
     };
 
     const scheduleUrlScan = () => {
@@ -195,9 +190,10 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
             // byte-safe UTF-8 decode
             const bytes = new Uint8Array(raw.length);
             for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-            term!.write(new TextDecoder('utf-8').decode(bytes));
-            // Дебаунсим извлечение URLs — после write нужно дождаться пока xterm
-            // отрисует, иначе buffer не содержит свежие данные.
+            const decoded = new TextDecoder('utf-8').decode(bytes);
+            term!.write(decoded);
+            // Параллельно копим в raw-буфер для URL-детектора (без ANSI и без xterm wrap)
+            appendRaw(decoded);
             scheduleUrlScan();
           } else if (m.type === 'pty.exit') {
             setStatus('closed');
