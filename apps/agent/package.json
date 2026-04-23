@@ -1,0 +1,26 @@
+{
+  "name": "@pocket-claude/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/agent.js",
+  "bin": {
+    "pocket-claude-agent": "dist/agent.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsup",
+    "start": "node dist/agent.js"
+  },
+  "dependencies": {
+    "@pocket-claude/protocol": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.10",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

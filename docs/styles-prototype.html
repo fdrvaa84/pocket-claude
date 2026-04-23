@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pocket Claude — три стиля</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #1a1a1a; font: 400 14px/1.5 'Inter', system-ui, sans-serif; color: #fff; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: transparent; }
+
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    padding: 14px 24px; background: rgba(20,20,20,.85); backdrop-filter: blur(16px);
+    border-bottom: 1px solid #2a2a2a;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .nav .brand { font-weight: 600; font-size: 13px; color: #a8a8a8; }
+  .nav .tabs { display: flex; gap: 4px; }
+  .nav .tab {
+    font-size: 12.5px; padding: 7px 14px; border-radius: 999px;
+    color: #888; transition: all .15s;
+  }
+  .nav .tab.active { background: #fff; color: #000; }
+  .nav .tab:hover:not(.active) { background: #2a2a2a; color: #fff; }
+  .nav .info { margin-left: auto; font-size: 11px; color: #777; }
+
+  .stage {
+    padding: 32px;
+    display: flex; justify-content: center;
+    min-height: calc(100vh - 60px);
+  }
+
+  .frame {
+    width: 100%; max-width: 1280px;
+    border-radius: 24px; overflow: hidden;
+    box-shadow: 0 30px 80px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.04);
+  }
+  .frame-meta {
+    padding: 16px 24px; background: #131313; color: #888;
+    font-size: 12px; border-top: 1px solid #2a2a2a;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .frame-meta .pill { background: #222; padding: 3px 9px; border-radius: 999px; font-size: 10.5px; color: #ccc; }
+
+  .screen { display: none; }
+  .screen.on { display: block; }
+
+  /* SVG icons placeholder */
+  .ic { display: inline-block; width: 1em; height: 1em; vertical-align: -.15em; }
+
+  /* ============================================================
+     STYLE A — MINIMAL MONO (Vercel/Linear vibe)
+     ============================================================ */
+  .a {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #fafafa;
+    --border: #ededed;
+    --border-2: #e5e5e5;
+    --fg: #0a0a0a;
+    --fg-2: #525252;
+    --muted: #a3a3a3;
+    --accent: #0a0a0a;
+    background: var(--bg); color: var(--fg);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    height: 760px; display: grid; grid-template-columns: 240px 1fr;
+  }
+  .a aside {
+    border-right: 1px solid var(--border);
+    background: var(--surface-2);
+    padding: 14px 12px; display: flex; flex-direction: column;
+  }
+  .a .a-brand { display: flex; align-items: center; gap: 9px; padding: 6px; margin-bottom: 8px; }
+  .a .a-logo {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--accent); color: var(--bg);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;
+  }
+  .a .a-title { font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+  .a .a-sub { font-size: 11px; color: var(--muted); }
+  .a .a-section { font-size: 10.5px; color: var(--muted); padding: 10px 8px 4px; text-transform: uppercase; letter-spacing: .07em; font-weight: 500; }
+  .a .a-row { padding: 6px 8px; border-radius: 6px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .a .a-row:hover { background: #f3f3f3; }
+  .a .a-row.on { background: #ededed; font-weight: 500; }
+  .a .a-tag { margin-left: auto; font-size: 10px; color: var(--muted); }
+  .a main { display: flex; flex-direction: column; min-width: 0; }
+  .a .a-top {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .a .a-bread { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .a .a-bread strong { color: var(--fg); font-weight: 500; }
+  .a .a-actions { display: flex; gap: 6px; }
+  .a .a-btn { padding: 6px 12px; border: 1px solid var(--border-2); border-radius: 7px; font-size: 12.5px; background: var(--bg); }
+  .a .a-btn.primary { background: var(--accent); color: var(--bg); border: 0; }
+  .a .a-content { flex: 1; padding: 32px 40px; overflow: auto; }
+  .a .a-h { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .a .a-desc { font-size: 13.5px; color: var(--muted); margin: 0 0 24px; }
+  .a .a-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .a .a-card { background: var(--bg); padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .a .a-card .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .a .a-card .v { font-size: 22px; font-weight: 500; letter-spacing: -0.01em; }
+  .a .a-card .vs { font-size: 11px; color: #16a34a; }
+  .a .a-list { margin-top: 24px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .a .a-li { padding: 12px 16px; display: flex; align-items: center; gap: 12px; font-size: 13.5px; cursor: pointer; }
+  .a .a-li + .a-li { border-top: 1px solid var(--border); }
+  .a .a-li:hover { background: var(--surface-2); }
+  .a .a-li .a-li-name { font-weight: 500; }
+  .a .a-li .a-li-meta { color: var(--muted); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+  .a .a-li .a-li-arr { margin-left: auto; color: var(--muted); }
+  .a .a-composer {
+    border-top: 1px solid var(--border); padding: 14px 24px; background: var(--bg);
+  }
+  .a .a-input {
+    border: 1px solid var(--border-2); border-radius: 10px; padding: 10px 14px;
+    display: flex; align-items: center; gap: 8px; font-size: 14px;
+  }
+  .a .a-input input { flex: 1; border: 0; outline: 0; font: inherit; background: transparent; }
+  .a .a-input button { background: var(--accent); color: var(--bg); padding: 5px 10px; border-radius: 6px; font-size: 12px; }
+  .a .a-pills { display: flex; gap: 6px; margin-top: 8px; }
+  .a .a-pill { font-size: 11px; padding: 4px 9px; border: 1px solid var(--border-2); border-radius: 6px; color: var(--fg-2); }
+  .a .a-pill.dark { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  /* ============================================================
+     STYLE B — EDITORIAL WARM (Notion/Posthog vibe with serif)
+     ============================================================ */
+  .b {
+    --bg: #f7f3ec;
+    --surface: #fbf8f1;
+    --warm: #e9e2d3;
+    --border: #d8cfb8;
+    --fg: #2c241a;
+    --fg-2: #574b3a;
+    --muted: #918671;
+    --accent: #2c241a;
+    --serif: 'Instrument Serif', Georgia, serif;
+    background: var(--bg); color: var(--fg);
+    font-family: 'Inter', system-ui, sans-serif;
+    height: 760px; display: grid; grid-template-columns: 280px 1fr;
+  }
+  .b aside {
+    background: var(--surface); border-right: 1px solid var(--border);
+    padding: 18px 16px; display: flex; flex-direction: column;
+  }
+  .b .b-brand { padding: 8px 6px 16px; }
+  .b .b-name { font-family: var(--serif); font-size: 22px; line-height: 1; }
+  .b .b-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .b .b-section { font-size: 10.5px; text-transform: uppercase; color: var(--muted); padding: 10px 6px 6px; letter-spacing: .12em; }
+  .b .b-row { padding: 8px 10px; border-radius: 8px; font-size: 13.5px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .b .b-row:hover { background: var(--warm); }
+  .b .b-row.on { background: var(--accent); color: var(--bg); font-weight: 500; }
+  .b .b-row .b-tag { margin-left: auto; font-size: 10px; opacity: .7; }
+  .b main { display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+  .b .b-top {
+    padding: 20px 32px; display: flex; align-items: baseline; justify-content: space-between;
+  }
+  .b .b-crumbs { font-size: 12.5px; color: var(--muted); }
+  .b .b-crumbs strong { color: var(--fg); font-family: var(--serif); font-size: 18px; font-weight: 400; font-style: italic; padding-left: 8px; }
+  .b .b-content { flex: 1; padding: 16px 64px 32px; overflow: auto; }
+  .b .b-hero { font-family: var(--serif); font-size: 44px; line-height: 1.05; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .b .b-hero em { font-style: italic; color: var(--fg-2); }
+  .b .b-lead { font-size: 14.5px; color: var(--fg-2); margin: 0 0 32px; max-width: 560px; }
+  .b .b-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .b .b-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px;
+  }
+  .b .b-card-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+  .b .b-card-t { font-family: var(--serif); font-size: 18px; }
+  .b .b-card-c { font-size: 11px; color: var(--muted); }
+  .b .b-li { padding: 8px 0; display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+  .b .b-li + .b-li { border-top: 1px dashed var(--border); }
+  .b .b-li .dot { width: 6px; height: 6px; border-radius: 50%; background: #16a34a; }
+  .b .b-li .name { flex: 1; }
+  .b .b-li .meta { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); }
+  .b .b-composer { padding: 16px 32px 24px; background: var(--bg); border-top: 1px solid var(--border); }
+  .b .b-cwrap { max-width: 720px; margin: 0 auto; }
+  .b .b-input {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 14px 18px; display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 8px 24px rgba(44,36,26,.06);
+  }
+  .b .b-input input { flex: 1; border: 0; outline: 0; background: transparent; font: 400 15px/1.4 var(--serif); font-style: italic; }
+  .b .b-input button { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--bg); display: flex; align-items: center; justify-content: center; }
+  .b .b-pills { display: flex; gap: 8px; margin-top: 10px; max-width: 720px; margin-left: auto; margin-right: auto; }
+  .b .b-pill {
+    font-size: 11.5px; padding: 5px 11px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--border); color: var(--fg-2);
+  }
+  .b .b-pill.dark { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  /* ============================================================
+     STYLE D — DEV MONO (A развитый — гиковский, но light, чистый)
+     ============================================================ */
+  .d {
+    --bg: #efece4;
+    --bg-2: #ebe7dc;
+    --surface: #f7f5ee;
+    --surface-2: #e8e4d8;
+    --border: #d4cfc1;
+    --border-2: #beb9a6;
+    --fg: #3a3631;
+    --fg-2: #57534e;
+    --muted: #8a8478;
+    --accent: #3a3631;
+    --acid: #57534e;       /* тёплый монохром для prompt — без яркого акцента */
+    --acid-tint: rgba(58,54,49,.08);
+    --green: #5a8f5f;      /* тёплый sage для online/ok */
+    --warn: #c08048;
+    --mono: 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', monospace;
+    background: var(--bg); color: var(--fg);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    height: 760px; display: grid; grid-template-columns: 256px 1fr 300px;
+  }
+  /* Sidebar */
+  .d aside.left {
+    background: var(--bg-2); border-right: 1px solid var(--border);
+    padding: 14px 10px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .d .d-brand {
+    display: flex; align-items: center; gap: 10px; padding: 6px 8px 12px;
+    border-bottom: 1px solid var(--border); margin-bottom: 8px;
+  }
+  .d .d-logo {
+    width: 26px; height: 26px; border-radius: 6px;
+    background: var(--accent); color: var(--bg);
+    font: 700 13px var(--mono); display: flex; align-items: center; justify-content: center;
+  }
+  .d .d-name { font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em; line-height: 1; }
+  .d .d-name + div { font: 400 10.5px var(--mono); color: var(--muted); margin-top: 3px; letter-spacing: 0; }
+  .d .d-section {
+    font: 500 10px var(--mono); color: var(--muted);
+    padding: 12px 8px 4px; text-transform: uppercase; letter-spacing: .12em;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .d .d-section .add {
+    width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; cursor: pointer; color: var(--muted); font-size: 14px;
+  }
+  .d .d-section .add:hover { background: var(--surface-2); color: var(--fg); }
+  .d .d-row {
+    padding: 5px 8px; border-radius: 5px; font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; color: var(--fg-2);
+  }
+  .d .d-row:hover { background: var(--surface-2); color: var(--fg); }
+  .d .d-row.on {
+    background: var(--accent); color: var(--bg); font-weight: 500;
+  }
+  .d .d-row .arr { color: var(--muted); font-size: 9px; width: 8px; }
+  .d .d-row.on .arr { color: rgba(255,255,255,.5); }
+  .d .d-row .name { flex: 1; }
+  .d .d-row .badge {
+    font: 500 9.5px var(--mono); padding: 1px 5px; border-radius: 3px;
+    background: var(--surface-2); color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .d .d-row.on .badge { background: rgba(255,255,255,.12); color: rgba(255,255,255,.7); border-color: transparent; }
+  .d .d-sub { padding-left: 18px; }
+  .d .d-sub .d-row { font-size: 12px; padding: 4px 8px; }
+  .d .d-user {
+    margin-top: auto; padding: 10px 8px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .d .d-avatar {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--bg);
+    display: flex; align-items: center; justify-content: center; font: 600 11px var(--mono);
+  }
+  .d .d-user-info { flex: 1; min-width: 0; }
+  .d .d-user-name { font-size: 12.5px; }
+  .d .d-user-email { font: 400 10.5px var(--mono); color: var(--muted); }
+
+  /* Center */
+  .d main { display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+  .d .d-top {
+    border-bottom: 1px solid var(--border); padding: 12px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .d .d-prompt {
+    font: 500 13.5px var(--mono); display: flex; align-items: baseline; gap: 6px;
+  }
+  .d .d-prompt .pp { color: var(--acid); }
+  .d .d-prompt .at { color: var(--muted); font-size: 12px; }
+  .d .d-prompt .device-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green); margin-right: 4px; vertical-align: 1px;
+  }
+  .d .d-actions { display: flex; gap: 4px; }
+  .d .d-iconbtn {
+    width: 30px; height: 30px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 14px; cursor: pointer;
+  }
+  .d .d-iconbtn:hover { background: var(--surface-2); color: var(--fg); }
+  .d .d-btn {
+    padding: 6px 11px; border-radius: 6px; font-size: 12.5px; font-weight: 500;
+    border: 1px solid var(--border-2); background: var(--bg); color: var(--fg);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .d .d-btn:hover { background: var(--surface-2); }
+  .d .d-btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .d .d-btn .kbd {
+    font: 500 10px var(--mono); padding: 1px 4px; border-radius: 3px;
+    background: rgba(255,255,255,.12); margin-left: 4px;
+  }
+  .d .d-btn:not(.primary) .kbd { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+
+  .d .d-content { flex: 1; padding: 28px 36px; overflow: auto; }
+  .d .d-h {
+    font-size: 26px; font-weight: 600; letter-spacing: -0.025em;
+    display: flex; align-items: baseline; gap: 10px; margin: 0 0 4px;
+  }
+  .d .d-h .v {
+    font: 500 12px var(--mono); color: var(--muted); padding: 2px 8px;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px;
+  }
+  .d .d-meta {
+    font: 400 12.5px var(--mono); color: var(--muted); margin: 0 0 24px;
+    display: flex; gap: 14px; align-items: center;
+  }
+  .d .d-meta .dot { color: var(--green); }
+  .d .d-meta .pipe { color: var(--border-2); }
+  .d .d-meta .key { color: var(--fg-2); }
+
+  /* Stats grid — терминальный лук */
+  .d .d-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    background: var(--bg);
+  }
+  .d .d-stat { padding: 14px 16px; border-right: 1px solid var(--border); }
+  .d .d-stat:last-child { border-right: 0; }
+  .d .d-stat .k { font: 500 10.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .d .d-stat .v { font: 500 22px/1.1 var(--mono); margin-top: 6px; letter-spacing: -0.01em; }
+  .d .d-stat .delta { font: 400 11px var(--mono); margin-top: 3px; }
+  .d .d-stat .delta.up { color: var(--green); }
+  .d .d-stat .delta.flat { color: var(--muted); }
+
+  /* List of recent — ASCII tree style */
+  .d .d-block { margin-top: 28px; }
+  .d .d-block-h {
+    font: 500 11px var(--mono); color: var(--muted);
+    text-transform: uppercase; letter-spacing: .1em;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .d .d-block-h .tag { color: var(--fg); font-weight: 500; text-transform: none; letter-spacing: 0; }
+  .d .d-block-h .tag::before { content: '# '; color: var(--acid); }
+
+  .d .d-list { margin-top: 4px; }
+  .d .d-li {
+    padding: 10px 4px; display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .d .d-li:hover { background: var(--surface-2); }
+  .d .d-li .branch { font: 400 12px var(--mono); color: var(--muted); width: 18px; }
+  .d .d-li .li-main { flex: 1; min-width: 0; }
+  .d .d-li .li-title { font-size: 13.5px; font-weight: 500; }
+  .d .d-li .li-meta { font: 400 11.5px var(--mono); color: var(--muted); margin-top: 2px; }
+  .d .d-li .li-meta .sep { color: var(--border-2); padding: 0 4px; }
+  .d .d-li .li-meta .cost { color: var(--green); }
+  .d .d-li .arr { color: var(--muted); font-family: var(--mono); }
+
+  /* Composer */
+  .d .d-composer {
+    border-top: 1px solid var(--border); padding: 14px 20px 16px; background: var(--bg);
+  }
+  .d .d-cw { max-width: 880px; margin: 0 auto; }
+  .d .d-input {
+    background: var(--bg); border: 1px solid var(--border-2); border-radius: 12px;
+    padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .d .d-input:focus-within { border-color: var(--acid); box-shadow: 0 0 0 3px var(--acid-tint); }
+  .d .d-input .pp { font: 500 14px var(--mono); color: var(--acid); }
+  .d .d-input input { flex: 1; border: 0; outline: 0; background: transparent; font: 400 14px/1.4 'Inter', system-ui; }
+  .d .d-input input::placeholder { color: var(--muted); }
+  .d .d-input button {
+    width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--bg);
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+  }
+  .d .d-input .send-kbd { font: 500 10px var(--mono); color: var(--muted); padding-right: 4px; }
+
+  .d .d-pills { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
+  .d .d-pill {
+    font: 500 11.5px var(--mono); padding: 4px 10px; border-radius: 6px;
+    background: var(--surface-2); color: var(--fg-2); border: 1px solid var(--border);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .d .d-pill:hover { background: var(--bg); }
+  .d .d-pill.dark { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .d .d-pill .k { color: var(--muted); font-weight: 400; }
+  .d .d-pill.dark .k { color: rgba(255,255,255,.6); }
+  .d .d-hint {
+    margin-left: auto; font: 400 11px var(--mono); color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .d .d-hint .kbd {
+    font: 500 10px var(--mono); padding: 1.5px 5px; border-radius: 3px;
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--fg-2);
+  }
+
+  /* Right panel — files */
+  .d aside.right {
+    background: var(--bg-2); border-left: 1px solid var(--border);
+    padding: 0; display: flex; flex-direction: column;
+  }
+  .d .d-tabs {
+    display: flex; border-bottom: 1px solid var(--border); background: var(--bg);
+  }
+  .d .d-tab {
+    flex: 1; padding: 10px; font: 500 12px var(--mono); color: var(--muted);
+    border-bottom: 2px solid transparent;
+    text-align: center; cursor: pointer;
+  }
+  .d .d-tab.on { color: var(--fg); border-bottom-color: var(--accent); background: var(--bg); }
+  .d .d-fs-path {
+    font: 400 11px var(--mono); color: var(--muted);
+    padding: 8px 14px; border-bottom: 1px solid var(--border);
+  }
+  .d .d-tree { padding: 8px 6px; flex: 1; overflow: auto; font: 400 12.5px var(--mono); }
+  .d .d-node {
+    padding: 3px 8px; display: flex; align-items: center; gap: 6px; border-radius: 4px; cursor: pointer;
+    color: var(--fg-2);
+  }
+  .d .d-node:hover { background: var(--surface-2); color: var(--fg); }
+  .d .d-node.dir { color: var(--fg); }
+  .d .d-node.modified { color: var(--warn); }
+  .d .d-node .ic { color: var(--muted); width: 12px; }
+  .d .d-node.indent { padding-left: 22px; }
+  .d .d-node.indent2 { padding-left: 36px; }
+
+  .d .d-term {
+    border-top: 1px solid var(--border); background: #2a2620;
+    padding: 10px 12px; font: 400 11.5px var(--mono); color: #e8e4d8;
+  }
+  .d .d-term-h { font-size: 10px; color: #8a8478; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .d .d-term-h span:last-child { color: #8fb892; }
+  .d .d-term .pp { color: #8fb892; }
+  .d .d-term .ok { color: #b8d6ba; }
+
+  .c {
+    --bg: #0a0d0c;
+    --surface: #11161a;
+    --surface-2: #161c20;
+    --border: #1f262b;
+    --border-2: #2a3339;
+    --fg: #e8eef0;
+    --fg-2: #b9c2c5;
+    --muted: #6c7a80;
+    --accent: #98ffa0;
+    --accent-2: #6ed670;
+    --accent-tint: rgba(152,255,160,.10);
+    background: var(--bg); color: var(--fg);
+    font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+    height: 760px; display: grid; grid-template-columns: 260px 1fr 320px;
+  }
+  .c aside {
+    background: var(--surface); border-right: 1px solid var(--border);
+    padding: 16px 12px; display: flex; flex-direction: column;
+  }
+  .c .c-brand { display: flex; align-items: center; gap: 8px; padding: 6px 4px 16px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .c .c-logo { color: var(--accent); font-size: 16px; }
+  .c .c-name { font-weight: 600; font-size: 13px; letter-spacing: 0.02em; }
+  .c .c-sec { font-size: 10px; color: var(--muted); padding: 6px 6px; text-transform: uppercase; letter-spacing: .15em; display: flex; justify-content: space-between; }
+  .c .c-sec .add { color: var(--accent); cursor: pointer; }
+  .c .c-row { padding: 6px 8px; font-size: 12.5px; cursor: pointer; display: flex; align-items: center; gap: 6px; border-left: 2px solid transparent; }
+  .c .c-row:hover { background: var(--surface-2); }
+  .c .c-row.on { background: var(--surface-2); border-left-color: var(--accent); color: var(--accent); }
+  .c .c-row .arrow { color: var(--muted); font-size: 11px; }
+  .c .c-tag { margin-left: auto; padding: 1px 6px; font-size: 9.5px; border: 1px solid var(--border-2); border-radius: 3px; color: var(--muted); }
+  .c .c-tag.live { color: var(--accent); border-color: rgba(152,255,160,.3); }
+  .c main { display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+  .c .c-top { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .c .c-prompt { color: var(--accent); font-size: 13px; }
+  .c .c-prompt span.fg { color: var(--fg); }
+  .c .c-prompt span.path { color: var(--muted); font-size: 11.5px; padding-left: 6px; }
+  .c .c-content { flex: 1; padding: 24px 28px; overflow: auto; font-family: 'IBM Plex Mono', monospace; }
+  .c .c-block { margin-bottom: 24px; }
+  .c .c-h { font-size: 12px; color: var(--accent); margin-bottom: 8px; letter-spacing: .05em; }
+  .c .c-h::before { content: '## '; opacity: .7; }
+  .c .c-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .c .c-table td { padding: 6px 12px 6px 0; border-bottom: 1px dashed var(--border-2); color: var(--fg-2); }
+  .c .c-table td.k { color: var(--muted); width: 90px; }
+  .c .c-table td.v { color: var(--accent); }
+  .c .c-card { padding: 12px; border: 1px solid var(--border-2); margin-bottom: 6px; font-size: 12px; cursor: pointer; }
+  .c .c-card:hover { background: var(--surface); }
+  .c .c-card .name { color: var(--fg); }
+  .c .c-card .path { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .c .c-composer { padding: 12px 20px 16px; border-top: 1px solid var(--border); background: var(--bg); }
+  .c .c-input { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: 4px; }
+  .c .c-input::before { content: '>'; color: var(--accent); }
+  .c .c-input input { flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; }
+  .c .c-input button { background: var(--accent); color: var(--bg); padding: 4px 10px; font-size: 11px; }
+  .c .c-pills { display: flex; gap: 6px; margin-top: 8px; font-size: 10.5px; }
+  .c .c-pill { padding: 3px 8px; border: 1px solid var(--border-2); color: var(--fg-2); }
+  .c .c-pill.dark { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .c .c-side { background: var(--surface); border-left: 1px solid var(--border); padding: 14px; font-size: 12px; }
+  .c .c-side h4 { font-size: 11px; color: var(--accent); margin: 0 0 10px; letter-spacing: .1em; text-transform: uppercase; }
+  .c .c-fs { font-size: 11.5px; color: var(--fg-2); }
+  .c .c-fs .dir { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="brand">Pocket Claude · style explorations</div>
+  <div class="tabs">
+    <button class="tab" data-screen="a">A · Minimal Mono</button>
+    <button class="tab" data-screen="b">B · Editorial Warm</button>
+    <button class="tab" data-screen="c">C · Hacker Terminal</button>
+    <button class="tab active" data-screen="d">D · Dev Mono ★</button>
+  </div>
+  <div class="info">Vercel/Linear vibe → Notion-style → Tech-monospace</div>
+</nav>
+
+<div class="stage">
+
+<!-- =============== A. MINIMAL MONO =============== -->
+<div id="a" class="screen">
+  <div class="frame">
+    <div class="a">
+      <aside>
+        <div class="a-brand">
+          <div class="a-logo">P</div>
+          <div>
+            <div class="a-title">Pocket Claude</div>
+            <div class="a-sub">2/3 устройств онлайн</div>
+          </div>
+        </div>
+        <div class="a-section">Проекты</div>
+        <div class="a-row on">📁 vpn <span class="a-tag">my-mac</span></div>
+        <div class="a-row">📁 claude-chat <span class="a-tag">vps-1</span></div>
+        <div class="a-row">📁 vesta <span class="a-tag">github</span></div>
+        <div class="a-section">Недавние</div>
+        <div class="a-row">💬 Deploy fix</div>
+        <div class="a-row">💬 Claude.md init</div>
+        <div class="a-row">💬 Refactor handlers</div>
+        <div style="flex: 1"></div>
+        <div class="a-row">⚙ Settings</div>
+      </aside>
+      <main>
+        <div class="a-top">
+          <div class="a-bread">Pocket Claude / <strong>vpn</strong></div>
+          <div class="a-actions">
+            <button class="a-btn">Files</button>
+            <button class="a-btn">Terminal</button>
+            <button class="a-btn primary">+ Чат</button>
+          </div>
+        </div>
+        <div class="a-content">
+          <h1 class="a-h">vpn</h1>
+          <p class="a-desc">/Users/aleksandrmalysev/vpn · подключено к <strong style="color: #16a34a">my-mac</strong> · 12 файлов</p>
+
+          <div class="a-cards">
+            <div class="a-card"><div class="k">Чатов</div><div class="v">12</div><div class="vs">+3 за неделю</div></div>
+            <div class="a-card"><div class="k">Toolcalls</div><div class="v">428</div><div class="vs">~$2.40</div></div>
+            <div class="a-card"><div class="k">Активность</div><div class="v">2ч назад</div><div class="vs">Sonnet 4.6</div></div>
+          </div>
+
+          <div class="a-list">
+            <div class="a-li"><div><div class="a-li-name">Deploy fix</div><div class="a-li-meta">2ч назад · 18 сообщений</div></div><div class="a-li-arr">→</div></div>
+            <div class="a-li"><div><div class="a-li-name">Создание CLAUDE.md</div><div class="a-li-meta">вчера · 4 сообщения</div></div><div class="a-li-arr">→</div></div>
+            <div class="a-li"><div><div class="a-li-name">Refactor wireguard config</div><div class="a-li-meta">3 дня · 22 сообщения</div></div><div class="a-li-arr">→</div></div>
+          </div>
+        </div>
+        <div class="a-composer">
+          <div class="a-input">
+            <input placeholder="Что делаем?"/>
+            <button>Send</button>
+          </div>
+          <div class="a-pills">
+            <span class="a-pill dark">Bypass</span>
+            <span class="a-pill">Sonnet 4.6 · Medium</span>
+            <span class="a-pill">/ для команд</span>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div class="frame-meta">
+      <span class="pill">Style A · Minimal Mono</span>
+      <span>Inspirations: Vercel, Linear, Resend</span>
+      <span style="margin-left: auto;">белый/чёрный · 1px borders · цифры в дашборде · acid-зелёный для green metrics</span>
+    </div>
+  </div>
+</div>
+
+<!-- =============== B. EDITORIAL WARM =============== -->
+<div id="b" class="screen">
+  <div class="frame">
+    <div class="b">
+      <aside>
+        <div class="b-brand">
+          <div class="b-name">Pocket Claude</div>
+          <div class="b-sub">your code · in your pocket</div>
+        </div>
+        <div class="b-section">Проекты</div>
+        <div class="b-row on">vpn <span class="b-tag">my-mac</span></div>
+        <div class="b-row">claude-chat <span class="b-tag">vps-1</span></div>
+        <div class="b-row">vesta <span class="b-tag">github</span></div>
+        <div class="b-section">Недавно</div>
+        <div class="b-row">Deploy fix</div>
+        <div class="b-row">CLAUDE.md init</div>
+        <div class="b-row">Refactor handlers</div>
+        <div style="flex:1"></div>
+        <div class="b-row">⚙ Настройки</div>
+      </aside>
+      <main>
+        <div class="b-top">
+          <div class="b-crumbs">Pocket Claude<strong>vpn</strong></div>
+        </div>
+        <div class="b-content">
+          <h1 class="b-hero">Доброе утро, <em>Александр</em></h1>
+          <p class="b-lead">Управляй своими проектами, как будто у тебя личный кабинет тёплых вечеров — без шума, без суеты.</p>
+
+          <div class="b-grid">
+            <div class="b-card">
+              <div class="b-card-h"><div class="b-card-t">Устройства</div><div class="b-card-c">2 / 3 онлайн</div></div>
+              <div class="b-li"><span class="dot"></span><span class="name">my-mac</span><span class="meta">darwin/arm64</span></div>
+              <div class="b-li"><span class="dot"></span><span class="name">vps-1</span><span class="meta">linux/x64</span></div>
+              <div class="b-li"><span class="dot" style="background:#a85a4a"></span><span class="name">home-pc</span><span class="meta">оффлайн 2ч</span></div>
+            </div>
+            <div class="b-card">
+              <div class="b-card-h"><div class="b-card-t">Активность</div><div class="b-card-c">за неделю</div></div>
+              <div class="b-li"><span class="name">12 чатов</span><span class="meta">~$2.40</span></div>
+              <div class="b-li"><span class="name">428 tool calls</span><span class="meta">~52 мин ассистента</span></div>
+              <div class="b-li"><span class="name">37 коммитов</span><span class="meta">в 4 проектах</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="b-composer">
+          <div class="b-cwrap">
+            <div class="b-input">
+              <input placeholder="Что бы ты хотел сделать сегодня?"/>
+              <button>↑</button>
+            </div>
+            <div class="b-pills">
+              <span class="b-pill dark">Bypass</span>
+              <span class="b-pill">Sonnet 4.6</span>
+              <span class="b-pill">Medium</span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+    <div class="frame-meta">
+      <span class="pill">Style B · Editorial Warm</span>
+      <span>Inspirations: Notion, Posthog, Substack</span>
+      <span style="margin-left: auto;">тёплая бумага · serif Instrument для hero · italic курсив для имён · dashed lines</span>
+    </div>
+  </div>
+</div>
+
+<!-- =============== C. HACKER TERMINAL =============== -->
+<div id="c" class="screen">
+  <div class="frame">
+    <div class="c">
+      <aside>
+        <div class="c-brand">
+          <div class="c-logo">▲</div>
+          <div class="c-name">pocket-claude</div>
+        </div>
+        <div class="c-sec">projects <span class="add">[+]</span></div>
+        <div class="c-row on"><span class="arrow">▾</span> vpn <span class="c-tag live">live</span></div>
+        <div style="padding-left: 16px">
+          <div class="c-row" style="font-size: 11.5px; color: var(--accent)">● deploy_fix</div>
+          <div class="c-row" style="font-size: 11.5px;">claude_md</div>
+        </div>
+        <div class="c-row"><span class="arrow">▸</span> claude-chat <span class="c-tag">idle</span></div>
+        <div class="c-row"><span class="arrow">▸</span> vesta <span class="c-tag">git</span></div>
+
+        <div class="c-sec" style="margin-top: 12px">tools</div>
+        <div class="c-row">$ files</div>
+        <div class="c-row">$ terminal</div>
+        <div class="c-row">$ settings</div>
+
+        <div style="flex:1"></div>
+        <div style="font-size: 10.5px; color: var(--muted); padding: 4px 6px; border-top: 1px solid var(--border); margin-top: 8px;">
+          aleksandr@pc<br/>
+          <span style="color: var(--accent)">●</span> 2/3 online · 0.1.0
+        </div>
+      </aside>
+
+      <main>
+        <div class="c-top">
+          <div class="c-prompt">
+            ➜ <span class="fg">vpn</span><span class="path">~/vpn @ my-mac</span>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="c-pill">[N]ew</button>
+            <button class="c-pill">[F]iles</button>
+          </div>
+        </div>
+        <div class="c-content">
+          <div class="c-block">
+            <div class="c-h">project</div>
+            <table class="c-table">
+              <tr><td class="k">name</td><td>vpn</td></tr>
+              <tr><td class="k">path</td><td>/Users/aleksandrmalysev/vpn</td></tr>
+              <tr><td class="k">device</td><td><span class="v">my-mac</span> <span style="color: var(--muted)">(darwin/arm64)</span></td></tr>
+              <tr><td class="k">status</td><td><span class="v">● online</span></td></tr>
+              <tr><td class="k">claude</td><td>v2.1.86 · logged in</td></tr>
+            </table>
+          </div>
+          <div class="c-block">
+            <div class="c-h">recent_chats</div>
+            <div class="c-card">
+              <div class="name">deploy_fix</div>
+              <div class="path">2h ago · 18 msgs · cost $0.42</div>
+            </div>
+            <div class="c-card">
+              <div class="name">create_claude_md</div>
+              <div class="path">yesterday · 4 msgs · cost $0.08</div>
+            </div>
+            <div class="c-card">
+              <div class="name">refactor_wireguard</div>
+              <div class="path">3d ago · 22 msgs · cost $0.71</div>
+            </div>
+          </div>
+        </div>
+        <div class="c-composer">
+          <div class="c-input">
+            <input placeholder="ask anything..."/>
+            <button>EXEC</button>
+          </div>
+          <div class="c-pills">
+            <span class="c-pill dark">bypass</span>
+            <span class="c-pill">sonnet-4.6</span>
+            <span class="c-pill">effort=medium</span>
+            <span class="c-pill">/help</span>
+          </div>
+        </div>
+      </main>
+
+      <aside class="c-side">
+        <h4>~/vpn</h4>
+        <div class="c-fs">
+          <div class="dir">▾ src/</div>
+          <div style="padding-left: 14px">  config.ts</div>
+          <div style="padding-left: 14px">  server.ts</div>
+          <div style="padding-left: 14px">  types.ts</div>
+          <div class="dir">▾ docs/</div>
+          <div style="padding-left: 14px">  README.md</div>
+          <div>  CLAUDE.md</div>
+          <div>  package.json</div>
+          <div>  tsconfig.json</div>
+        </div>
+        <h4 style="margin-top: 16px">stdout (last)</h4>
+        <div style="background: #000; padding: 8px; font-size: 11px; color: var(--accent);">
+          $ npm run build<br/>
+          ✓ Compiled in 3.2s<br/>
+          $ <span style="background: var(--accent); color: var(--bg);">_</span>
+        </div>
+      </aside>
+    </div>
+    <div class="frame-meta">
+      <span class="pill">Style C · Hacker Terminal</span>
+      <span>Inspirations: Linear-dark, Warp, ghostty, neovim</span>
+      <span style="margin-left: auto;">monospace везде · phosphor зелёный акцент · 3-колоночный плотный · нет скруглений</span>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- =============== D. DEV MONO (★ recommended) =============== -->
+<div id="d" class="screen on">
+  <div class="frame">
+    <div class="d">
+      <!-- LEFT SIDEBAR -->
+      <aside class="left">
+        <div class="d-brand">
+          <div class="d-logo">P</div>
+          <div>
+            <div class="d-name">pocket-claude</div>
+            <div>v0.1.0 · 2/3 online</div>
+          </div>
+        </div>
+
+        <div class="d-section">
+          <span>projects</span>
+          <span class="add">+</span>
+        </div>
+        <div class="d-row on">
+          <span class="arr">▾</span>
+          <span class="name">vpn</span>
+          <span class="badge">my-mac</span>
+        </div>
+        <div class="d-sub">
+          <div class="d-row" style="background: var(--surface-2); color: var(--fg);">
+            <span style="color: var(--green);">●</span><span class="name">deploy_fix</span>
+          </div>
+          <div class="d-row"><span style="color: var(--muted);">○</span><span class="name">claude_md_init</span></div>
+          <div class="d-row"><span style="color: var(--muted);">○</span><span class="name">refactor</span></div>
+        </div>
+        <div class="d-row">
+          <span class="arr">▸</span>
+          <span class="name">claude-chat</span>
+          <span class="badge">vps-1</span>
+        </div>
+        <div class="d-row">
+          <span class="arr">▸</span>
+          <span class="name">vesta</span>
+          <span class="badge">github</span>
+        </div>
+
+        <div class="d-section">
+          <span>tools</span>
+        </div>
+        <div class="d-row"><span class="ic" style="color: var(--muted);">⌘</span><span class="name">Settings</span><span class="badge">⌘,</span></div>
+        <div class="d-row"><span class="ic" style="color: var(--muted);">⌘</span><span class="name">Devices</span><span class="badge">⌘D</span></div>
+
+        <div class="d-user">
+          <div class="d-avatar">A</div>
+          <div class="d-user-info">
+            <div class="d-user-name">Александр</div>
+            <div class="d-user-email">test@x.com</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTER -->
+      <main>
+        <div class="d-top">
+          <div class="d-prompt">
+            <span class="pp">~</span>
+            <span>vpn</span>
+            <span class="at">@<span class="device-dot"></span>my-mac</span>
+          </div>
+          <div class="d-actions">
+            <button class="d-btn"><span>⏮</span>Files<span class="kbd">⌘F</span></button>
+            <button class="d-btn"><span>▸</span>Terminal<span class="kbd">⌘T</span></button>
+            <button class="d-btn primary"><span>+</span>Чат<span class="kbd">⌘N</span></button>
+          </div>
+        </div>
+
+        <div class="d-content">
+          <h1 class="d-h">vpn <span class="v">main</span></h1>
+          <p class="d-meta">
+            <span><span class="dot">●</span> online</span>
+            <span class="pipe">·</span>
+            <span class="key">/Users/aleksandrmalysev/vpn</span>
+            <span class="pipe">·</span>
+            <span>my-mac · darwin/arm64</span>
+            <span class="pipe">·</span>
+            <span>claude v2.1.86</span>
+          </p>
+
+          <!-- Stats -->
+          <div class="d-stats">
+            <div class="d-stat">
+              <div class="k">Чатов</div>
+              <div class="v">12</div>
+              <div class="delta up">+3 за неделю</div>
+            </div>
+            <div class="d-stat">
+              <div class="k">Tool calls</div>
+              <div class="v">428</div>
+              <div class="delta flat">≈ 52 мин ассистента</div>
+            </div>
+            <div class="d-stat">
+              <div class="k">Стоимость</div>
+              <div class="v">$2.40</div>
+              <div class="delta flat">~$0.20 / чат</div>
+            </div>
+            <div class="d-stat">
+              <div class="k">Активность</div>
+              <div class="v">2ч</div>
+              <div class="delta flat">Sonnet 4.6</div>
+            </div>
+          </div>
+
+          <!-- Recent chats -->
+          <div class="d-block">
+            <div class="d-block-h">
+              <span class="tag">recent_chats</span>
+              <span style="font: 400 11px var(--mono); color: var(--muted);">3 of 12</span>
+            </div>
+            <div class="d-list">
+              <div class="d-li">
+                <span class="branch">├─</span>
+                <div class="li-main">
+                  <div class="li-title">deploy_fix</div>
+                  <div class="li-meta">2h ago<span class="sep">·</span>18 msgs<span class="sep">·</span><span class="cost">$0.42</span></div>
+                </div>
+                <span class="arr">→</span>
+              </div>
+              <div class="d-li">
+                <span class="branch">├─</span>
+                <div class="li-main">
+                  <div class="li-title">create_claude_md</div>
+                  <div class="li-meta">yesterday<span class="sep">·</span>4 msgs<span class="sep">·</span><span class="cost">$0.08</span></div>
+                </div>
+                <span class="arr">→</span>
+              </div>
+              <div class="d-li" style="border-bottom: 0;">
+                <span class="branch">└─</span>
+                <div class="li-main">
+                  <div class="li-title">refactor_wireguard</div>
+                  <div class="li-meta">3 days<span class="sep">·</span>22 msgs<span class="sep">·</span><span class="cost">$0.71</span></div>
+                </div>
+                <span class="arr">→</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Composer -->
+        <div class="d-composer">
+          <div class="d-cw">
+            <div class="d-input">
+              <span class="pp">$</span>
+              <input placeholder="Опиши задачу или /help для команд" />
+              <span class="send-kbd">⌘↵</span>
+              <button>↑</button>
+            </div>
+            <div class="d-pills">
+              <span class="d-pill dark"><span class="k">mode</span>=Bypass</span>
+              <span class="d-pill"><span class="k">model</span>=Sonnet 4.6</span>
+              <span class="d-pill"><span class="k">effort</span>=medium</span>
+              <span class="d-hint"><span class="kbd">/</span> commands · <span class="kbd">↵</span> send · <span class="kbd">⇧↵</span> newline</span>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- RIGHT — files + mini terminal -->
+      <aside class="right">
+        <div class="d-tabs">
+          <div class="d-tab on">files</div>
+          <div class="d-tab">terminal</div>
+          <div class="d-tab">tasks <span style="color: var(--green); margin-left: 3px;">●</span></div>
+        </div>
+        <div class="d-fs-path">~/vpn</div>
+        <div class="d-tree">
+          <div class="d-node dir"><span class="ic">▾</span>src</div>
+          <div class="d-node indent modified"><span class="ic">M</span>config.ts</div>
+          <div class="d-node indent"><span class="ic"> </span>server.ts</div>
+          <div class="d-node indent"><span class="ic"> </span>types.ts</div>
+          <div class="d-node dir"><span class="ic">▾</span>docs</div>
+          <div class="d-node indent"><span class="ic"> </span>README.md</div>
+          <div class="d-node indent modified"><span class="ic">A</span>CLAUDE.md</div>
+          <div class="d-node dir"><span class="ic">▸</span>scripts</div>
+          <div class="d-node"><span class="ic"> </span>package.json</div>
+          <div class="d-node"><span class="ic"> </span>tsconfig.json</div>
+          <div class="d-node"><span class="ic"> </span>.gitignore</div>
+        </div>
+        <div class="d-term">
+          <div class="d-term-h">
+            <span>terminal · my-mac</span>
+            <span>● live</span>
+          </div>
+          <div><span class="pp">$</span> npm run build</div>
+          <div class="ok">✓ Compiled in 3.2s</div>
+          <div><span class="pp">$</span> git status</div>
+          <div>M  src/config.ts</div>
+          <div>?? docs/CLAUDE.md</div>
+          <div><span class="pp">$</span> █</div>
+        </div>
+      </aside>
+    </div>
+    <div class="frame-meta">
+      <span class="pill" style="background: var(--green); color: #000;">Style D · Dev Mono ★</span>
+      <span>Inspirations: Linear · Warp · Fly.io · Vercel</span>
+      <span style="margin-left: auto;">монохром · JetBrains Mono для tech-bits · ASCII tree branches · file-status M/A/D · keyboard hints везде</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.tab').forEach(t => {
+    t.onclick = () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.screen').forEach(x => x.classList.remove('on'));
+      t.classList.add('active');
+      document.getElementById(t.dataset.screen).classList.add('on');
+    };
+  });
+</script>
+</body>
+</html>

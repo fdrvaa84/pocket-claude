@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Pocket Claude — Mobile (full)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  [hidden]{display:none!important}
+  html,body{margin:0;padding:0;background:#f3ece0;font-family:'Inter',system-ui,sans-serif;color:#2a2620;-webkit-font-smoothing:antialiased;touch-action:manipulation}
+  button,input,textarea{font:inherit;color:inherit;border:0;background:transparent}
+  button{cursor:pointer}
+  :root{
+    --bg:#efece4;--bg-2:#ebe7dc;--surface:#f7f5ee;--surface-2:#e8e4d8;
+    --border:#d4cfc1;--border-strong:#beb9a6;
+    --fg:#3a3631;--fg-2:#57534e;--muted:#8a8478;
+    --accent:#3a3631;--accent-tint:rgba(58,54,49,.08);
+    --ok:#5a8f5f;--warn:#c08048;--danger:#b85a4a;
+    --bypass:#f5c94c;--bypass-edge:#e6b63a;
+    --mono:'JetBrains Mono',monospace;
+  }
+
+  /* =============== layout =============== */
+  .stage{min-height:100dvh;display:flex;flex-direction:column;align-items:center;padding:18px 12px;gap:10px}
+  .toolbar{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:999px;max-width:100%}
+  .toolbar button{font:500 11.5px Inter;padding:5px 10px;border-radius:999px;color:var(--fg-2)}
+  .toolbar button.on{background:var(--accent);color:var(--bg)}
+  .hint{font:500 11.5px var(--mono);color:var(--muted);text-align:center}
+
+  .phone{width:390px;height:844px;max-width:100%;max-height:calc(100dvh - 100px);border-radius:42px;background:#000;padding:10px;position:relative;box-shadow:0 30px 80px rgba(0,0,0,.18);overflow:hidden}
+  .phone::before{content:'';position:absolute;top:18px;left:50%;transform:translateX(-50%);width:120px;height:32px;background:#000;border-radius:18px;z-index:30}
+  .screen{width:100%;height:100%;background:var(--bg);border-radius:34px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+
+  @media(max-width:480px){
+    body{background:var(--bg)}
+    .stage{padding:0;gap:0}
+    .toolbar{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:200;box-shadow:0 6px 18px rgba(0,0,0,.2);max-width:calc(100% - 16px)}
+    .hint{display:none}
+    .phone{width:100vw;height:100dvh;max-height:none;padding:0;border-radius:0;box-shadow:none}
+    .phone::before{display:none}
+    .screen{border-radius:0}
+  }
+
+  /* =============== top bar =============== */
+  .top{padding:14px 10px 10px;display:grid;grid-template-columns:44px 1fr 44px;gap:6px;align-items:center;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0;padding-top:calc(14px + env(safe-area-inset-top))}
+  .ic-btn{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;transition:background .12s}
+  .ic-btn:active{background:var(--surface-2)}
+  .top .ctx{text-align:center;min-width:0}
+  .top .ctx .name{font:600 15.5px Inter;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .top .ctx .meta{font:500 11.5px var(--mono);color:var(--muted);margin-top:2px;display:flex;gap:5px;align-items:center;justify-content:center}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  .dot.off{background:var(--danger)}
+  .dot.warn{background:var(--warn)}
+
+  /* =============== empty state =============== */
+  .empty{flex:1;overflow-y:auto;padding:24px 22px 10px;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:flex-start}
+  .empty .logo{width:56px;height:56px;border-radius:16px;background:var(--accent);color:var(--bg);display:flex;align-items:center;justify-content:center;font:700 24px var(--mono);box-shadow:0 6px 18px rgba(58,54,49,.18);margin-top:22px}
+  .empty h1{font:600 22px Inter;letter-spacing:-0.02em;margin:6px 0 0;text-align:center}
+  .empty .welcome-sub{color:var(--muted);font-size:14px;text-align:center;max-width:280px}
+  .quick{display:flex;flex-direction:column;gap:8px;width:100%;margin-top:4px}
+  .quick button{padding:13px 16px;border-radius:14px;border:1px solid var(--border);background:var(--surface);display:flex;gap:12px;align-items:center;font-size:15px;text-align:left}
+  .quick button:active{background:var(--surface-2)}
+  .quick .pp{color:var(--muted);font:500 14px var(--mono)}
+  .recent-sect{width:100%;margin-top:18px}
+  .recent-sect .h{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:0 4px 8px;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;justify-content:space-between}
+  .rec{padding:10px 8px;display:flex;gap:10px;align-items:center;border-radius:10px}
+  .rec:active{background:var(--surface)}
+  .rec .branch{font:400 13px var(--mono);color:var(--muted);width:18px}
+  .rec .title{flex:1;font-size:14.5px}
+  .rec .date{font:500 11.5px var(--mono);color:var(--muted)}
+
+  /* =============== chat =============== */
+  .chat{flex:1;overflow-y:auto;padding:18px 14px 8px;display:flex;flex-direction:column;gap:14px}
+  .bubble{max-width:86%;padding:12px 16px;border-radius:20px;font-size:15.5px;line-height:1.5;word-wrap:break-word}
+  .bubble.user{background:var(--accent);color:var(--bg);align-self:flex-end;border-bottom-right-radius:6px}
+  .bubble.ai{background:var(--surface);border:1px solid var(--border);align-self:flex-start;border-bottom-left-radius:6px}
+  .bubble.ai code{font:500 13.5px var(--mono);background:var(--surface-2);padding:2px 6px;border-radius:4px}
+  .bubble.ai pre{font:500 12.5px var(--mono);background:#2a2620;color:#f0e9d6;padding:10px 12px;border-radius:10px;overflow-x:auto;margin:6px 0 4px;line-height:1.5}
+  .bubble.error{background:#f4e3df;border:1px solid var(--danger);color:var(--danger);align-self:flex-start;border-bottom-left-radius:6px}
+  .tool-chip{display:inline-flex;gap:7px;align-items:center;padding:5px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font:500 11.5px var(--mono);color:var(--muted);margin:0 0 8px}
+  .tool-chip .name{color:var(--accent);font-weight:600}
+  .tool-chip .dot-live{width:5px;height:5px;background:var(--ok);border-radius:50%;animation:blink 1.6s infinite}
+  .typing{align-self:flex-start;display:flex;gap:5px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:18px}
+  .typing span{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1.4s infinite}
+  .typing span:nth-child(2){animation-delay:.15s}
+  .typing span:nth-child(3){animation-delay:.3s}
+  .running-status{align-self:flex-start;display:flex;gap:8px;align-items:center;padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;font:500 12px var(--mono);color:var(--muted)}
+  .running-status .live{width:6px;height:6px;background:var(--ok);border-radius:50%;animation:blink 1.2s infinite}
+  @keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
+
+  /* =============== composer =============== */
+  .composer{padding:8px 10px 10px;background:var(--bg);border-top:1px solid var(--border);padding-bottom:calc(10px + env(safe-area-inset-bottom));flex-shrink:0}
+  .composer .bar{background:var(--surface);border:1px solid var(--border-strong);border-radius:26px;padding:6px;display:flex;gap:6px;align-items:flex-end;min-height:52px;transition:border-color .12s}
+  .composer .bar:focus-within{border-color:var(--accent)}
+  .composer .plus,.composer .send,.composer .mic{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .08s,background .12s}
+  .composer .plus{color:var(--fg-2);font:400 28px Inter;line-height:.5}
+  .composer .plus:active{background:var(--surface-2);transform:scale(.94)}
+  .composer .plus.active{background:var(--accent);color:var(--bg)}
+  .composer textarea{flex:1;outline:0;font:400 16px Inter;resize:none;padding:10px 4px;max-height:140px;line-height:1.35}
+  .composer .send{background:var(--accent);color:var(--bg);font-size:16px}
+  .composer .send:active{transform:scale(.94)}
+  .composer .send:disabled{opacity:.35}
+  .composer .mic{color:var(--muted);font-size:22px}
+  .composer .mic:active{background:var(--surface-2)}
+  .composer .mic.recording{background:var(--danger);color:#fff;animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(184,90,74,.5)}50%{box-shadow:0 0 0 8px rgba(184,90,74,0)}}
+  .meta-row{display:flex;align-items:center;gap:8px;padding:8px 4px 0}
+  .meta-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;font:500 11.5px var(--mono);color:var(--muted);border:1px solid var(--border);border-radius:999px}
+  .meta-pill:active{background:var(--surface-2)}
+  .meta-pill .warn{color:var(--warn);font-weight:600}
+  .meta-row .gap{flex:1}
+  .meta-row .proj{font:500 11px var(--mono);color:var(--muted)}
+
+  /* =============== slash suggestions (над composer) =============== */
+  .slash-sugg{position:absolute;left:8px;right:8px;bottom:calc(100% + 8px);background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 -8px 24px rgba(0,0,0,.08);max-height:260px;overflow-y:auto}
+  .slash-sugg .h{padding:8px 12px;font:500 10px var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--muted);border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;justify-content:space-between}
+  .slash-row{padding:11px 12px;display:flex;align-items:center;gap:10px;font-size:14px;width:100%;text-align:left}
+  .slash-row:active{background:var(--surface-2)}
+  .slash-row.on{background:var(--accent-tint)}
+  .slash-row .cmd{font:500 13.5px var(--mono);color:var(--accent)}
+  .slash-row .args{font:400 11.5px var(--mono);color:var(--muted)}
+  .slash-row .desc{margin-left:auto;font:400 11.5px Inter;color:var(--muted);text-align:right}
+
+  /* =============== drawer =============== */
+  .bd{position:absolute;inset:0;background:rgba(0,0,0,.42);z-index:40;opacity:0;pointer-events:none;transition:opacity .25s}
+  .bd.on{opacity:1;pointer-events:auto}
+  .drawer{position:absolute;top:0;left:0;width:86%;max-width:340px;height:100%;background:var(--bg-2);border-right:1px solid var(--border);z-index:41;transform:translateX(-100%);transition:transform .28s cubic-bezier(.22,1,.36,1);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+  .drawer.on{transform:translateX(0)}
+  .d-head{padding:14px 14px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+  .d-logo{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--bg);display:flex;align-items:center;justify-content:center;font:700 14px var(--mono)}
+  .d-name{font:600 14.5px Inter;line-height:1.1}
+  .d-stat{font:500 11px var(--mono);color:var(--muted);margin-top:2px}
+  .d-body{flex:1;overflow-y:auto;padding:6px 6px}
+  .d-section{font:500 11px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.12em;padding:14px 8px 6px;display:flex;align-items:center;justify-content:space-between}
+  .d-section .add{font-size:16px;color:var(--muted);padding:2px 8px}
+  .d-row{padding:11px 10px;border-radius:10px;display:flex;gap:9px;align-items:center;cursor:pointer}
+  .d-row:active{background:var(--surface-2)}
+  .d-row.on{background:var(--accent);color:var(--bg)}
+  .d-row .arr{font:400 10px var(--mono);color:var(--muted);width:10px}
+  .d-row.on .arr{color:rgba(255,255,255,.55)}
+  .d-row .name{flex:1;font-size:14px}
+  .d-row .badge{font:500 10.5px var(--mono);padding:2px 7px;border-radius:5px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
+  .d-row.on .badge{background:rgba(255,255,255,.16);border-color:transparent;color:rgba(255,255,255,.8)}
+  .d-sub{padding-left:16px;margin-bottom:4px}
+  .d-sub .d-row{font-size:13px;padding:8px 10px}
+  .d-sub .d-row.on{background:var(--accent-tint);color:var(--fg)}
+  .d-devices{margin-top:4px}
+  .d-devices .d-row{padding:9px 10px;font-size:13.5px}
+  .d-devices .kind-ic{font-size:15px;line-height:1}
+  .d-user{margin-top:auto;padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+  .d-avatar{width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--bg);display:flex;align-items:center;justify-content:center;font:600 13px var(--mono)}
+  .d-user .info{flex:1;min-width:0}
+  .d-user .info .n{font-size:13px}
+  .d-user .info .e{font:500 11px var(--mono);color:var(--muted)}
+
+  /* =============== bottom sheet =============== */
+  .sheet{position:absolute;left:0;right:0;bottom:0;z-index:42;background:var(--bg);border-radius:24px 24px 0 0;padding:6px 16px calc(22px + env(safe-area-inset-bottom));max-height:82%;overflow-y:auto;transform:translateY(100%);transition:transform .28s cubic-bezier(.22,1,.36,1);box-shadow:0 -10px 40px rgba(0,0,0,.18)}
+  .sheet.on{transform:translateY(0)}
+  .sheet-grab{width:44px;height:4px;border-radius:2px;background:var(--border-strong);margin:8px auto 12px}
+  .sheet h2{font:600 17px Inter;margin:0 0 4px}
+  .sheet .h-sub{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+  .sheet .g-title{font:500 11px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.12em;padding:16px 4px 8px}
+  .sheet .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .sheet .chip{font:500 14px Inter;padding:9px 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--fg-2)}
+  .sheet .chip.on{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+  .sheet .chip.warn.on{background:var(--bypass);color:#2a2620;border-color:var(--bypass-edge)}
+  .sheet .rows{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .sheet .row{padding:13px 16px;display:flex;align-items:center;gap:12px;font-size:15px;border-bottom:1px solid var(--border)}
+  .sheet .row:last-child{border-bottom:0}
+  .sheet .row:active{background:var(--surface-2)}
+  .sheet .row .ic{width:26px;text-align:center;font-size:17px;opacity:.85}
+  .sheet .row .title{flex:1}
+  .sheet .row .sub{font:400 12px var(--mono);color:var(--muted);margin-top:2px}
+  .sheet .row .check{color:var(--accent);font-size:16px;font-weight:600}
+  .sheet .row .right{color:var(--muted);font:500 12px var(--mono)}
+
+  /* =============== files overlay =============== */
+  .overlay{position:absolute;inset:0;background:var(--bg);z-index:45;transform:translateY(100%);transition:transform .3s cubic-bezier(.22,1,.36,1);display:flex;flex-direction:column}
+  .overlay.on{transform:translateY(0)}
+  .ov-head{padding:14px 14px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);padding-top:calc(14px + env(safe-area-inset-top))}
+  .ov-head .title{flex:1;font:600 15.5px Inter}
+  .ov-head .crumbs{font:500 11.5px var(--mono);color:var(--muted);margin-top:2px}
+  .ov-search{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;background:var(--surface)}
+  .ov-search input{flex:1;font:500 14px var(--mono);background:transparent;outline:0}
+  .ov-body{flex:1;overflow-y:auto;padding:4px 0}
+  .ov-item{padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:14.5px}
+  .ov-item:active{background:var(--surface)}
+  .ov-item .ic{font-size:16px;width:22px;text-align:center}
+  .ov-item .size{font:500 11px var(--mono);color:var(--muted);margin-left:auto}
+
+  /* =============== voice recording overlay =============== */
+  .voice{position:absolute;inset:auto 0 0 0;top:50%;z-index:46;padding:40px 0;background:linear-gradient(to top,rgba(184,90,74,.95),rgba(184,90,74,.7));color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+  .voice.on{opacity:1;pointer-events:auto;top:0}
+  .voice .big-mic{width:80px;height:80px;border-radius:50%;background:#fff;color:var(--danger);display:flex;align-items:center;justify-content:center;font-size:34px;margin-bottom:16px;animation:pulse-big 1s infinite}
+  @keyframes pulse-big{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+  .voice h3{font:600 22px Inter;margin:0 0 6px}
+  .voice p{font:500 13px var(--mono);margin:0;opacity:.85}
+  .voice .waveform{display:flex;gap:5px;align-items:center;height:36px;margin:22px 0}
+  .voice .wb{width:4px;background:#fff;border-radius:2px;animation:wave 1s ease-in-out infinite}
+  .voice .wb:nth-child(1){animation-delay:0s}
+  .voice .wb:nth-child(2){animation-delay:.1s}
+  .voice .wb:nth-child(3){animation-delay:.2s}
+  .voice .wb:nth-child(4){animation-delay:.3s}
+  .voice .wb:nth-child(5){animation-delay:.4s}
+  .voice .wb:nth-child(6){animation-delay:.5s}
+  .voice .wb:nth-child(7){animation-delay:.6s}
+  @keyframes wave{0%,100%{height:8px}50%{height:32px}}
+  .voice .stop-btn{background:#fff;color:var(--danger);padding:11px 24px;border-radius:999px;font:600 14px Inter;margin-top:14px}
+
+  /* =============== toast =============== */
+  .toast{position:absolute;bottom:120px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--accent);color:var(--bg);padding:10px 18px;border-radius:999px;font:500 13px Inter;box-shadow:0 8px 20px rgba(0,0,0,.2);opacity:0;pointer-events:none;transition:all .2s;z-index:100;white-space:nowrap}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="toolbar">
+    <button data-scene="empty" class="on">Empty</button>
+    <button data-scene="streaming">Streaming</button>
+    <button data-scene="done">Done</button>
+    <button data-scene="error">Error</button>
+    <button data-scene="long">Long answer</button>
+  </div>
+  <div class="hint">☰ drawer · + sheet · ✚ new · / команды · 🎙 голос · Enter = новая строка</div>
+
+  <div class="phone"><div class="screen">
+
+    <!-- ============= top ============= -->
+    <div class="top">
+      <button class="ic-btn" id="btn-menu">☰</button>
+      <div class="ctx">
+        <div class="name" id="top-name">Новый чат</div>
+        <div class="meta"><span class="dot" id="top-dot"></span><span id="top-device">vpn @ vpskz</span></div>
+      </div>
+      <button class="ic-btn" id="btn-newchat">✚</button>
+    </div>
+
+    <!-- ============= empty ============= -->
+    <div class="empty" id="scene-empty">
+      <div class="logo">P</div>
+      <h1>vpn @ vpskz</h1>
+      <div class="welcome-sub">Опиши задачу. Claude бежит на vpskz, файлы живут на vpn-сервере.</div>
+      <div class="quick">
+        <button data-q="Что в этой папке? Кратко."><span class="pp">$</span>Что в этой папке? Кратко.</button>
+        <button data-q="git status и опиши изменения"><span class="pp">$</span>git status и опиши изменения</button>
+        <button data-q="Найди и покажи TODO-комментарии"><span class="pp">$</span>Найди TODO</button>
+      </div>
+      <div class="recent-sect">
+        <div class="h">recent_chats · 3<span>→</span></div>
+        <div class="rec"><span class="branch">├─</span><span class="title">deploy_fix</span><span class="date">2ч</span></div>
+        <div class="rec"><span class="branch">├─</span><span class="title">claude_md_init</span><span class="date">вчера</span></div>
+        <div class="rec"><span class="branch">└─</span><span class="title">refactor_wireguard</span><span class="date">3дн</span></div>
+      </div>
+    </div>
+
+    <!-- ============= streaming ============= -->
+    <div class="chat" id="scene-streaming" hidden>
+      <div class="bubble user">Почитай deploy.sh и скажи что делает фаза 3?</div>
+      <div class="bubble ai">
+        <div class="tool-chip"><span class="dot-live"></span><span class="name">rfs_read</span> deploy.sh</div>
+        Фаза 3 — <b>сборка статических ассетов</b>: копирует <code>.next/static/</code> в standalone, потом <code>systemctl restart</code>.
+      </div>
+      <div class="bubble user">А если AUTMZR висит?</div>
+      <div class="running-status"><span class="live"></span>vpskz · 0:17 · 2 tool calls</div>
+      <div class="bubble ai" style="max-width:60%">
+        <div class="tool-chip"><span class="dot-live"></span><span class="name">rfs_bash</span> ss -lntp</div>
+      </div>
+      <div class="typing"><span></span><span></span><span></span></div>
+    </div>
+
+    <!-- ============= done ============= -->
+    <div class="chat" id="scene-done" hidden>
+      <div class="bubble user">Почитай deploy.sh и скажи что делает фаза 3?</div>
+      <div class="bubble ai">
+        <div class="tool-chip"><span class="name">rfs_read</span> deploy.sh</div>
+        Фаза 3 — <b>сборка статических ассетов</b>: копирует <code>.next/static/</code> в standalone-папку, потом <code>systemctl restart</code>.
+      </div>
+      <div class="bubble user">А если AUTMZR висит?</div>
+      <div class="bubble ai">
+        <div class="tool-chip"><span class="name">rfs_bash</span> ss -lntp | grep 3100</div>
+        Порт <code>3100</code> держит orphan <code>next-server</code>. Решение:
+        <br>1. <code>kill -9 $PID</code>
+        <br>2. <code>systemctl restart claudeautmzr</code>
+      </div>
+    </div>
+
+    <!-- ============= error ============= -->
+    <div class="chat" id="scene-error" hidden>
+      <div class="bubble user">Почитай deploy.sh</div>
+      <div class="bubble error">
+        ❌ <b>Device offline.</b> Устройство <code>vpsru-real</code> потеряло соединение. Восстановится автоматически.
+      </div>
+    </div>
+
+    <!-- ============= long answer with code ============= -->
+    <div class="chat" id="scene-long" hidden>
+      <div class="bubble user">Напиши systemd unit для nginx</div>
+      <div class="bubble ai">
+        <div class="tool-chip"><span class="name">rfs_write</span> /etc/systemd/system/nginx.service</div>
+        Создал юнит. Основное:
+        <pre>[Unit]
+Description=nginx
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/sbin/nginx
+ExecReload=/usr/sbin/nginx -s reload
+
+[Install]
+WantedBy=multi-user.target</pre>
+        Включи через <code>systemctl enable --now nginx</code>.
+      </div>
+    </div>
+
+    <!-- ============= composer ============= -->
+    <div class="composer">
+      <div class="bar" id="composer-bar">
+        <button class="plus" id="btn-plus">+</button>
+        <textarea id="ta" rows="1" placeholder="Сообщение…" autocomplete="off"></textarea>
+        <button class="mic" id="btn-mic" title="Голос">🎙</button>
+        <button class="send" id="btn-send" disabled title="Отправить">↑</button>
+      </div>
+      <div class="meta-row">
+        <button class="meta-pill" id="btn-meta">Sonnet 4.6 · <span class="warn">Bypass</span></button>
+        <span class="gap"></span>
+        <span class="proj">vpn @ vpskz</span>
+      </div>
+    </div>
+
+    <!-- ============= drawer ============= -->
+    <div class="bd" id="drawer-bd"></div>
+    <aside class="drawer" id="drawer">
+      <div class="d-head">
+        <div class="d-logo">P</div>
+        <div>
+          <div class="d-name">pocket-claude</div>
+          <div class="d-stat">v0.1.0 · 2/3 online</div>
+        </div>
+      </div>
+      <div class="d-body">
+        <div class="d-section"><span>projects</span><button class="add" onclick="toast('+ Новый проект')">+</button></div>
+        <div class="d-row on"><span class="arr">▾</span><span class="name">vpn</span><span class="badge">vpskz</span></div>
+        <div class="d-sub">
+          <div class="d-row on"><span class="name">● deploy_fix</span></div>
+          <div class="d-row"><span class="name">○ claude_md_init</span></div>
+          <div class="d-row"><span class="name">○ refactor</span></div>
+          <div class="d-row" onclick="toast('+ Новый чат для vpn')"><span class="name" style="color:var(--muted)">+ новый чат</span></div>
+        </div>
+        <div class="d-row"><span class="arr">▸</span><span class="name">claude-chat</span><span class="badge">gpt-autmzr</span></div>
+        <div class="d-row"><span class="arr">▸</span><span class="name">vesta</span><span class="badge">📂 vpsru-real</span></div>
+
+        <div class="d-section"><span>devices · 2/3</span><button class="add" onclick="toast('+ Подключить устройство')">+</button></div>
+        <div class="d-devices">
+          <div class="d-section" style="padding:2px 8px 2px;font-size:9px">🤖 claude</div>
+          <div class="d-row"><span class="kind-ic">🤖</span><span class="name">vpskz</span><span class="badge" style="color:var(--ok)">● online</span></div>
+          <div class="d-row"><span class="kind-ic">🤖</span><span class="name">home-mac</span><span class="badge" style="color:var(--muted)">○ offline</span></div>
+          <div class="d-section" style="padding:6px 8px 2px;font-size:9px">📂 files</div>
+          <div class="d-row"><span class="kind-ic">📂</span><span class="name">vpsru-real</span><span class="badge" style="color:var(--ok)">● online</span></div>
+        </div>
+
+        <div class="d-section"><span>tools</span></div>
+        <div class="d-row" onclick="openFiles()"><span class="name">📁 Файлы vpskz</span></div>
+        <div class="d-row" onclick="toast('Terminal — скоро')"><span class="name">&gt;_ Terminal</span></div>
+        <div class="d-row" onclick="toast('Settings')"><span class="name">⚙ Settings</span><span class="badge">⌘,</span></div>
+      </div>
+      <div class="d-user">
+        <div class="d-avatar">A</div>
+        <div class="info">
+          <div class="n">Александр</div>
+          <div class="e">fdrvaa84@gmail.com</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============= + sheet ============= -->
+    <div class="bd" id="sheet-bd"></div>
+    <div class="sheet" id="sheet">
+      <div class="sheet-grab"></div>
+      <h2>Настройки чата</h2>
+      <div class="h-sub">Применяются ко всем сообщениям этой сессии</div>
+
+      <div class="g-title">Режим</div>
+      <div class="chips" data-radio="mode">
+        <button class="chip">Ask</button>
+        <button class="chip">Accept</button>
+        <button class="chip">Plan</button>
+        <button class="chip warn on">⚡ Bypass</button>
+      </div>
+
+      <div class="g-title">Модель</div>
+      <div class="rows" data-radio-rows="model">
+        <div class="row on" data-v="Sonnet 4.6"><span class="ic">◈</span><div class="title">Sonnet 4.6 <div class="sub">быстро · баланс</div></div><span class="check">✓</span></div>
+        <div class="row" data-v="Opus 4.7"><span class="ic">◈</span><div class="title">Opus 4.7 <span class="right">1M ctx</span><div class="sub">глубоко · медленно</div></div><span class="check" hidden>✓</span></div>
+        <div class="row" data-v="Haiku 4.5"><span class="ic">◈</span><div class="title">Haiku 4.5 <div class="sub">мгновенно · дёшево</div></div><span class="check" hidden>✓</span></div>
+      </div>
+
+      <div class="g-title">Effort</div>
+      <div class="chips" data-radio="effort">
+        <button class="chip">low</button>
+        <button class="chip on">medium</button>
+        <button class="chip">high</button>
+        <button class="chip">extra</button>
+        <button class="chip">max</button>
+      </div>
+
+      <div class="g-title">Быстрые действия</div>
+      <div class="rows">
+        <div class="row" onclick="closeAllSheets();openFiles()"><span class="ic">📁</span><div class="title">Файлы устройства</div><span class="right">⌘F</span></div>
+        <div class="row" onclick="toast('Terminal')"><span class="ic">&gt;_</span><div class="title">Terminal</div><span class="right">⌘T</span></div>
+        <div class="row" onclick="closeAllSheets();showSlash()"><span class="ic">/</span><div class="title">Все slash-команды</div></div>
+        <div class="row" onclick="toast('Прикрепление файлов — roadmap')"><span class="ic">📎</span><div class="title">Прикрепить файл</div><span class="right">soon</span></div>
+      </div>
+    </div>
+
+    <!-- ============= slash suggestions ============= -->
+    <div class="slash-sugg" id="slash-sugg" hidden></div>
+
+    <!-- ============= files overlay ============= -->
+    <div class="overlay" id="files">
+      <div class="ov-head">
+        <button class="ic-btn" onclick="closeFiles()">←</button>
+        <div class="title">
+          <div>Файлы · vpskz</div>
+          <div class="crumbs" id="crumbs">/root/pc-rfs-test</div>
+        </div>
+      </div>
+      <div class="ov-search">
+        <span style="color:var(--muted)">⌕</span>
+        <input placeholder="Найти в папке — ⏎ глубже" id="files-search">
+      </div>
+      <div class="ov-body">
+        <div class="ov-item"><span class="ic">↰</span><span>..</span></div>
+        <div class="ov-item"><span class="ic">📁</span><span>.git</span></div>
+        <div class="ov-item"><span class="ic">📁</span><span>src</span></div>
+        <div class="ov-item"><span class="ic">📄</span><span>app.py</span><span class="size">170 B</span></div>
+        <div class="ov-item"><span class="ic">📄</span><span>CLAUDE.md</span><span class="size">1.2 KB</span></div>
+        <div class="ov-item"><span class="ic">📄</span><span>deploy.sh</span><span class="size">3.4 KB</span></div>
+        <div class="ov-item"><span class="ic">📄</span><span>package.json</span><span class="size">824 B</span></div>
+        <div class="ov-item"><span class="ic">📄</span><span>README.md</span><span class="size">4.1 KB</span></div>
+      </div>
+    </div>
+
+    <!-- ============= voice overlay ============= -->
+    <div class="voice" id="voice">
+      <div class="big-mic">🎙</div>
+      <h3>Слушаю…</h3>
+      <p id="voice-timer">0:03</p>
+      <div class="waveform"><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div></div>
+      <button class="stop-btn" id="voice-stop">Стоп</button>
+    </div>
+
+    <!-- ============= toast ============= -->
+    <div class="toast" id="toast"></div>
+
+  </div></div>
+</div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>r.querySelectorAll(s);
+
+/* ===== scene switching ===== */
+function setScene(n){
+  ['empty','streaming','done','error','long'].forEach(x=>$('#scene-'+x).hidden=(x!==n));
+  $$('[data-scene]').forEach(b=>b.classList.toggle('on',b.dataset.scene===n));
+  $('#top-name').textContent=n==='empty'?'Новый чат':n==='error'?'deploy_fix':n==='long'?'systemd_nginx':'deploy_fix';
+  $('#top-dot').className='dot'+(n==='error'?' off':'');
+}
+$$('[data-scene]').forEach(b=>b.addEventListener('click',()=>setScene(b.dataset.scene)));
+
+/* ===== drawer ===== */
+const drawer=$('#drawer'),drawerBd=$('#drawer-bd');
+const openDrawer=yes=>{drawer.classList.toggle('on',yes);drawerBd.classList.toggle('on',yes)}
+$('#btn-menu').addEventListener('click',()=>openDrawer(true));
+drawerBd.addEventListener('click',()=>openDrawer(false));
+
+/* ===== + sheet ===== */
+const sheet=$('#sheet'),sheetBd=$('#sheet-bd');
+const openSheet=yes=>{sheet.classList.toggle('on',yes);sheetBd.classList.toggle('on',yes);$('#btn-plus').classList.toggle('active',yes)}
+$('#btn-plus').addEventListener('click',()=>openSheet(!sheet.classList.contains('on')));
+$('#btn-meta').addEventListener('click',()=>openSheet(true));
+sheetBd.addEventListener('click',()=>openSheet(false));
+
+/* ===== files overlay ===== */
+const files=$('#files');
+function openFiles(){files.classList.add('on')}
+function closeFiles(){files.classList.remove('on')}
+
+/* ===== voice overlay ===== */
+const voice=$('#voice');let voiceTimer,voiceSec=0;
+$('#btn-mic').addEventListener('click',()=>{
+  voice.classList.add('on');
+  $('#btn-mic').classList.add('recording');
+  voiceSec=0;$('#voice-timer').textContent='0:00';
+  voiceTimer=setInterval(()=>{voiceSec++;const m=Math.floor(voiceSec/60),s=voiceSec%60;$('#voice-timer').textContent=m+':'+String(s).padStart(2,'0')},1000);
+});
+function stopVoice(withText=true){
+  voice.classList.remove('on');
+  $('#btn-mic').classList.remove('recording');
+  clearInterval(voiceTimer);
+  if(withText&&voiceSec>0){ta.value='Расшифровка голоса: проверь статус nginx на vpskz';ta.dispatchEvent(new Event('input'));}
+}
+$('#voice-stop').addEventListener('click',()=>stopVoice(true));
+
+/* ===== closeAll helper ===== */
+function closeAllSheets(){openSheet(false);openDrawer(false);closeFiles();voice.classList.remove('on');$('#btn-mic').classList.remove('recording');clearInterval(voiceTimer);}
+
+/* ===== textarea + send ===== */
+const ta=$('#ta'),btnMic=$('#btn-mic'),btnSend=$('#btn-send');
+ta.addEventListener('input',()=>{
+  ta.style.height='auto';
+  ta.style.height=Math.min(ta.scrollHeight,140)+'px';
+  const has=ta.value.trim().length>0;
+  btnSend.disabled=!has;
+  btnMic.style.display=has?'none':'';
+  btnSend.style.display=has?'':'none';
+  /* slash suggestions */
+  if(ta.value.startsWith('/')) showSlash(ta.value); else hideSlash();
+});
+btnSend.style.display='none';
+ta.addEventListener('keydown',e=>{
+  /* Enter = newline (default). Desktop: Cmd/Ctrl+Enter = send. No bare-Enter send on mobile. */
+  if(e.key==='Enter' && (e.metaKey||e.ctrlKey)){ e.preventDefault(); if(!btnSend.disabled) btnSend.click(); }
+});
+btnSend.addEventListener('click',()=>{
+  if(btnSend.disabled) return;
+  const t=ta.value.trim();
+  ta.value='';ta.style.height='auto';
+  btnSend.disabled=true;btnMic.style.display='';btnSend.style.display='none';
+  hideSlash();
+  setScene('streaming');
+  setTimeout(()=>setScene('done'),2500);
+  toast('Отправлено → '+t.slice(0,40)+(t.length>40?'…':''));
+});
+
+/* ===== quick-prompts ===== */
+$$('.quick button').forEach(b=>b.addEventListener('click',()=>{
+  ta.value=b.dataset.q;ta.dispatchEvent(new Event('input'));ta.focus();
+}));
+
+/* ===== new chat ===== */
+$('#btn-newchat').addEventListener('click',()=>{setScene('empty');ta.value='';ta.dispatchEvent(new Event('input'));toast('Новый чат')});
+
+/* ===== radio chips in sheet ===== */
+$$('[data-radio]').forEach(g=>g.addEventListener('click',e=>{
+  const c=e.target.closest('.chip');if(!c)return;
+  g.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on');
+  g.querySelectorAll('.chip').forEach(x=>x.classList.toggle('warn',x.textContent.includes('Bypass')));
+  updateMeta();
+}));
+$$('[data-radio-rows]').forEach(g=>g.addEventListener('click',e=>{
+  const r=e.target.closest('.row');if(!r)return;
+  g.querySelectorAll('.row').forEach(x=>{x.classList.remove('on');const c=x.querySelector('.check');if(c)c.hidden=true});
+  r.classList.add('on');const c=r.querySelector('.check');if(c)c.hidden=false;
+  updateMeta();
+}));
+function updateMeta(){
+  const model=$('[data-radio-rows="model"] .row.on').dataset.v;
+  const mode=$('[data-radio="mode"] .chip.on')?.textContent.replace('⚡','').trim()||'Ask';
+  const isBypass=mode==='Bypass';
+  $('#btn-meta').innerHTML=`${model} · <span class="${isBypass?'warn':''}">${mode}</span>`;
+}
+
+/* ===== slash suggestions ===== */
+const SLASH=[
+  {cmd:'/help',desc:'список команд'},
+  {cmd:'/clear',desc:'новый чат'},
+  {cmd:'/files',desc:'открыть файлы'},
+  {cmd:'/terminal',desc:'терминал'},
+  {cmd:'/settings',desc:'настройки'},
+  {cmd:'/cd',args:'ПУТЬ',desc:'сменить корень'},
+  {cmd:'/!',args:'КОМАНДА',desc:'выполнить bash'},
+  {cmd:'/init',desc:'CLAUDE.md'},
+  {cmd:'/compact',desc:'сжать историю'},
+];
+function showSlash(q){
+  const s=q||ta.value||'/';
+  const matches=SLASH.filter(x=>x.cmd.startsWith(s));
+  if(!matches.length){hideSlash();return}
+  const el=$('#slash-sugg');
+  el.hidden=false;
+  el.innerHTML=`
+    <div class="h"><span>/ slash_commands</span><span style="font:500 10px var(--mono)">${matches.length}</span></div>
+    ${matches.map((m,i)=>`<button class="slash-row ${i===0?'on':''}" onclick="pickSlash('${m.cmd}')"><span class="cmd">${m.cmd}</span>${m.args?`<span class="args">${m.args}</span>`:''}<span class="desc">${m.desc}</span></button>`).join('')}`;
+}
+function hideSlash(){$('#slash-sugg').hidden=true}
+function pickSlash(c){ta.value=c+' ';ta.focus();ta.dispatchEvent(new Event('input'));}
+
+/* ===== toast ===== */
+let toastTm;
+function toast(text){
+  const t=$('#toast');t.textContent=text;t.classList.add('on');
+  clearTimeout(toastTm);
+  toastTm=setTimeout(()=>t.classList.remove('on'),1800);
+}
+
+/* ===== file overlay — tap items ===== */
+$$('.ov-item').forEach(it=>it.addEventListener('click',()=>{
+  const name=it.querySelector('span:nth-child(2)').textContent;
+  toast('→ '+name);
+  if(name.startsWith('.')||name==='..'){/* nothing */}
+  else if(it.querySelector('.size')){closeFiles();toast('Открываю '+name)}
+}));
+</script>
+</body>
+</html>

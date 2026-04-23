@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pc
+      POSTGRES_PASSWORD: pcpwd
+      POSTGRES_DB: pocket_claude
+    volumes:
+      - ./data/pg:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  master:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    depends_on: [postgres]
+    ports:
+      - "${PORT:-3100}:3100"
+    environment:
+      DATABASE_URL: postgresql://pc:pcpwd@postgres:5432/pocket_claude

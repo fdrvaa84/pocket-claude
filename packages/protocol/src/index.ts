@@ -1,0 +1,369 @@
+/**
+ * Pocket-Claude protocol v1.
+ * Сообщения между master (Next.js) и agent (standalone Node).
+ * Транспорт — WebSocket (WSS в prod, WS для localhost).
+ */
+
+export const PROTOCOL_VERSION = 1;
+
+/** Общий конверт. Все сообщения идут как JSON-строка. */
+export interface Envelope {
+  /** Тип сообщения, см. MessageType */
+  type: MessageType;
+  /** UUID запроса. Стриминговые ответы несут correlation_id = id запроса. */
+  id?: string;
+  correlation_id?: string;
+}
+
+export type MessageType =
+  // handshake
+  | 'hello' | 'hello.ack' | 'error'
+  // keep-alive
+  | 'ping' | 'pong'
+  // exec
+  | 'exec' | 'exec.stdout' | 'exec.stderr' | 'exec.exit'
+  // claude
+  | 'claude' | 'claude.event' | 'claude.done' | 'claude.error'
+  // filesystem
+  | 'fs.list' | 'fs.list.reply'
+  | 'fs.read' | 'fs.read.reply'
+  | 'fs.write' | 'fs.write.reply'
+  | 'fs.mkdir' | 'fs.mkdir.reply'
+  | 'fs.delete' | 'fs.delete.reply'
+  // status
+  | 'status.request' | 'status.reply'
+  // jobs (resilience across disconnects/restarts)
+  | 'jobs.recap' | 'jobs.resume' | 'jobs.ack'
+  // pty (persistent interactive terminal через псевдо-TTY)
+  | 'pty.open' | 'pty.opened' | 'pty.data' | 'pty.resize' | 'pty.close' | 'pty.exit' | 'pty.error';
+
+// ============ handshake ============
+
+export interface HelloMessage extends Envelope {
+  type: 'hello';
+  agent: 'pocket-claude-agent';
+  version: string;
+  os: string;
+  arch: string;
+  hostname: string;
+  capabilities: Array<'exec' | 'claude' | 'fs'>;
+  claude: {
+    installed: boolean;
+    version?: string;
+    logged_in: boolean;
+  };
+}
+
+export interface HelloAckMessage extends Envelope {
+  type: 'hello.ack';
+  server_time: string;
+  protocol: number;
+}
+
+export interface ErrorMessage extends Envelope {
+  type: 'error';
+  code: string;
+  message: string;
+}
+
+// ============ keep-alive ============
+
+export interface PingMessage extends Envelope { type: 'ping' }
+export interface PongMessage extends Envelope { type: 'pong' }
+
+// ============ exec ============
+
+export interface ExecRequest extends Envelope {
+  type: 'exec';
+  id: string;
+  cwd: string;
+  cmd: string;
+  timeout_ms?: number; // default 60000
+}
+export interface ExecStdout extends Envelope { type: 'exec.stdout'; correlation_id: string; text: string }
+export interface ExecStderr extends Envelope { type: 'exec.stderr'; correlation_id: string; text: string }
+export interface ExecExit extends Envelope {
+  type: 'exec.exit';
+  correlation_id: string;
+  code: number | null;
+  signal?: string | null;
+}
+
+// ============ claude ============
+
+export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
+export type Effort = 'low' | 'medium' | 'high';
+
+export interface ClaudeRequest extends Envelope {
+  type: 'claude';
+  id: string;
+  cwd: string;
+  prompt: string;
+  model?: string; // 'sonnet' | 'opus' | 'haiku'
+  resume_session_id?: string | null;
+  system_prompt?: string;
+  allowed_tools?: string[];
+  disallowed_tools?: string[];      // passed as --disallowed-tools
+  built_in_tools?: string | null;   // value for --tools flag; pass "" to disable all built-ins
+  strict_mcp_config?: boolean;      // --strict-mcp-config
+  /**
+   * MCP-серверы, которые agent должен добавить claude CLI через --mcp-config.
+   * Используется в proxy-режиме: pocket-claude подставляет rfs-mcp-сервер,
+   * который роутит все fs/exec tool-вызовы обратно на fs-device.
+   */
+  mcp_servers?: Record<string, McpServerSpec>;
+  permission_mode?: PermissionMode; // default 'bypassPermissions'
+  effort?: Effort;                  // влияет на system prompt
+  timeout_ms?: number; // default 1800000 (30 min)
+}
+
+/** Один MCP-сервер в формате claude CLI (stdio-транспорт). */
+export interface McpServerSpec {
+  /** Команда для запуска. Agent может резолвить sentinel 'pocket-claude-rfs' в путь к bundled mcp-скрипту. */
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
+/** Одно событие из стрима `claude --output-format stream-json`. */
+export interface ClaudeEvent extends Envelope {
+  type: 'claude.event';
+  correlation_id: string;
+  /** Любой JSON-объект из stream-json (type + fields). Переносим 1:1 без интерпретации. */
+  event: Record<string, unknown>;
+}
+
+export interface ClaudeDone extends Envelope {
+  type: 'claude.done';
+  correlation_id: string;
+  session_id?: string;
+  result?: string;
+  cost_usd?: number;
+  num_turns?: number;
+}
+
+export interface ClaudeError extends Envelope {
+  type: 'claude.error';
+  correlation_id: string;
+  message: string;
+}
+
+// ============ filesystem ============
+
+export type FsEntryType = 'dir' | 'file';
+
+export interface FsEntry {
+  name: string;
+  path: string; // relative to request path
+  type: FsEntryType;
+  size?: number;
+  mtime?: string; // ISO
+}
+
+export interface FsListRequest extends Envelope {
+  type: 'fs.list';
+  id: string;
+  path: string; // абсолютный путь на устройстве
+  depth?: number; // default 1
+}
+export interface FsListReply extends Envelope {
+  type: 'fs.list.reply';
+  correlation_id: string;
+  path: string;
+  entries: FsEntry[];
+  truncated?: boolean;
+  error?: string;
+}
+
+export interface FsReadRequest extends Envelope {
+  type: 'fs.read';
+  id: string;
+  path: string;
+  max_bytes?: number; // default 5MB
+}
+export interface FsReadReply extends Envelope {
+  type: 'fs.read.reply';
+  correlation_id: string;
+  path: string;
+  content?: string; // utf8; если бинарный — пусто и binary=true
+  binary?: boolean;
+  size?: number;
+  error?: string;
+}
+
+export interface FsWriteRequest extends Envelope {
+  type: 'fs.write';
+  id: string;
+  path: string;
+  content: string; // utf8
+  create_dirs?: boolean;
+}
+export interface FsWriteReply extends Envelope {
+  type: 'fs.write.reply';
+  correlation_id: string;
+  path: string;
+  size?: number;
+  error?: string;
+}
+
+export interface FsMkdirRequest extends Envelope {
+  type: 'fs.mkdir';
+  id: string;
+  path: string;
+  recursive?: boolean;
+}
+export interface FsMkdirReply extends Envelope {
+  type: 'fs.mkdir.reply';
+  correlation_id: string;
+  error?: string;
+}
+
+export interface FsDeleteRequest extends Envelope {
+  type: 'fs.delete';
+  id: string;
+  path: string;
+  recursive?: boolean;
+}
+export interface FsDeleteReply extends Envelope {
+  type: 'fs.delete.reply';
+  correlation_id: string;
+  error?: string;
+}
+
+// ============ status ============
+
+export interface StatusRequest extends Envelope {
+  type: 'status.request';
+  id: string;
+}
+export interface StatusReply extends Envelope {
+  type: 'status.reply';
+  correlation_id: string;
+  claude: { installed: boolean; version?: string; logged_in: boolean };
+  disk: { free_bytes: number; total_bytes: number };
+  uptime_s: number;
+}
+
+// ============ jobs ============
+
+/** Agent → Master после (re)connect: список незавершённых/не-ack'нутых job'ов. */
+export interface JobsRecap extends Envelope {
+  type: 'jobs.recap';
+  jobs: Array<{
+    id: string;          // correlation_id = request.id
+    status: 'running' | 'done' | 'error';
+    started_at: string;  // ISO
+    buffered_bytes?: number;
+  }>;
+}
+
+/** Master → Agent: «перепосли мне все события этого job из буфера». */
+export interface JobsResume extends Envelope {
+  type: 'jobs.resume';
+  id: string;
+  job_id: string;
+}
+
+/** Master → Agent: «job сохранён, буфер можно удалить». */
+export interface JobsAck extends Envelope {
+  type: 'jobs.ack';
+  id: string;
+  job_id: string;
+}
+
+// ============ pty (persistent interactive terminal) ============
+
+/**
+ * Master → Agent: открыть новую PTY-сессию.
+ * Агент создаёт псевдо-TTY через node-pty, запускает shell, отвечает pty.opened.
+ */
+export interface PtyOpenRequest extends Envelope {
+  type: 'pty.open';
+  id: string;            // correlation_id для всех последующих сообщений сессии
+  cwd?: string;          // стартовая директория; если пусто → $HOME
+  shell?: string;        // default: 'bash'
+  cols?: number;         // default 80
+  rows?: number;         // default 24
+  env?: Record<string, string>; // доп. переменные окружения
+}
+
+/** Agent → Master: подтверждение открытия сессии. */
+export interface PtyOpenedMessage extends Envelope {
+  type: 'pty.opened';
+  correlation_id: string;
+  pid: number;
+}
+
+/**
+ * Двунаправленное байтовое сообщение.
+ * Master → Agent: байты в stdin (ввод с клавиатуры пользователя).
+ * Agent → Master: байты из stdout+stderr (вывод программы).
+ * data — base64, чтобы binary-safe пройти через JSON.
+ */
+export interface PtyDataMessage extends Envelope {
+  type: 'pty.data';
+  correlation_id: string;
+  data: string; // base64
+}
+
+/** Master → Agent: изменение размеров «окна» — при resize клиента. */
+export interface PtyResizeMessage extends Envelope {
+  type: 'pty.resize';
+  correlation_id: string;
+  cols: number;
+  rows: number;
+}
+
+/** Master → Agent: закрыть сессию (SIGHUP). */
+export interface PtyCloseMessage extends Envelope {
+  type: 'pty.close';
+  correlation_id: string;
+}
+
+/** Agent → Master: shell завершился. */
+export interface PtyExitMessage extends Envelope {
+  type: 'pty.exit';
+  correlation_id: string;
+  code: number | null;
+  signal?: string | null;
+}
+
+/** Agent → Master: ошибка (например, node-pty не установлен). */
+export interface PtyErrorMessage extends Envelope {
+  type: 'pty.error';
+  correlation_id: string;
+  message: string;
+  /** Если 'missing_node_pty' — клиент покажет инструкцию по установке. */
+  code?: 'missing_node_pty' | 'spawn_failed' | 'unknown';
+}
+
+// ============ union ============
+
+export type AnyMessage =
+  | HelloMessage | HelloAckMessage | ErrorMessage
+  | PingMessage | PongMessage
+  | ExecRequest | ExecStdout | ExecStderr | ExecExit
+  | ClaudeRequest | ClaudeEvent | ClaudeDone | ClaudeError
+  | FsListRequest | FsListReply
+  | FsReadRequest | FsReadReply
+  | FsWriteRequest | FsWriteReply
+  | FsMkdirRequest | FsMkdirReply
+  | FsDeleteRequest | FsDeleteReply
+  | StatusRequest | StatusReply
+  | JobsRecap | JobsResume | JobsAck
+  | PtyOpenRequest | PtyOpenedMessage | PtyDataMessage | PtyResizeMessage
+  | PtyCloseMessage | PtyExitMessage | PtyErrorMessage;
+
+/** Защита агента: пути к которым НИКОГДА не допускаем fs-операции. */
+export const FS_BLOCKLIST_PATTERNS = [
+  /(^|\/)\.claude(\/|$)/,                // ~/.claude/**
+  /(^|\/)\.config\/claude(\/|$)/,        // ~/.config/claude/**
+  /(^|\/)\.ssh(\/|$)/,                   // ~/.ssh/**
+  /(^|\/)\.aws(\/|$)/,                   // ~/.aws/**
+  /(^|\/)\.gnupg(\/|$)/,                 // ~/.gnupg/**
+  /(^|\/)\.pocket-claude(\/|$)/,         // собственный конфиг агента
+];
+
+export function isPathBlocked(absolutePath: string): boolean {
+  return FS_BLOCKLIST_PATTERNS.some((re) => re.test(absolutePath));
+}
