@@ -123,12 +123,14 @@ export async function POST(req: NextRequest) {
   if (isProxy) {
     const rfsToken = await issueRfsToken(user.id, project!.id, fsDeviceId);
     const masterUrl = process.env.PUBLIC_URL || 'http://localhost:3100';
-    // Для claude-устройства мы даём sentinel 'autmzr-command-rfs' — agent сам
-    // резолвит его в путь к локальному bundled скрипту rfs-mcp. (Старый
-    // sentinel 'pocket-claude-rfs' тоже принимается агентами, для совместимости.)
+    // ВАЖНО: оставляем sentinel 'pocket-claude-rfs', т.к. уже задеплоенные
+    // прод-агенты работают на СТАРОМ bundle и не знают 'autmzr-command-rfs'.
+    // Новые агенты (после rebrand) принимают оба варианта — см.
+    // apps/agent/src/handlers/claude.ts (resolveRfsScriptPath).
+    // Когда все агенты обновятся — можно безопасно переключить на новый sentinel.
     mcp_servers = {
       rfs: {
-        command: 'autmzr-command-rfs',
+        command: 'pocket-claude-rfs',
         args: [],
         env: {
           // Новые имена. POCKET_CLAUDE_* шлём дублем — старый rfs-mcp
