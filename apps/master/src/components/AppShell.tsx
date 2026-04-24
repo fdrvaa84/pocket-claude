@@ -1,17 +1,20 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  Plus, Settings as SettingsIcon, Menu, X, ChevronRight, ChevronDown,
+  Plus, Settings as SettingsIcon, Menu, X, ChevronRight,
   FolderOpen, Files, TerminalSquare, MessageSquare,
   Send, Loader2, ArrowLeft, Mic, Check,
+  MessagesSquare, MonitorSmartphone, Home as HomeIcon,
 } from 'lucide-react';
 import Markdown from './Markdown';
 import { COMMANDS, matchCommands, parseSlash, findCommand } from './slashCommands';
 import { ModePill, ModelEffortPill, MODELS, MODES, EFFORTS, type ModelValue, type EffortValue, type ModeValue } from './Controls';
 import { effectiveIntent, type DeviceIntent } from '@/lib/device-intent';
 import { useSpeechRecognition } from '@/lib/useSpeechRecognition';
+import MobileTabBar, { type MobileTab } from './MobileTabBar';
+import DevicesList from './DevicesList';
 
 const FileTree = dynamic(() => import('./FileTree'), { ssr: false, loading: () => null });
 const Terminal = dynamic(() => import('./Terminal'), { ssr: false, loading: () => null });
@@ -68,11 +71,8 @@ export default function AppShell({ user }: { user: User }) {
   const [sending, setSending] = useState(false);
 
   // === Голосовой ввод (Web Speech API + ChatGPT-style UI) =========
-  // ChatGPT-style: при записи композер целиком превращается в waveform-режим
-  // с ✗ слева и ✓ справа. Распознанный текст инсертится в input по позиции
-  // курсора (можно надиктовать в середину уже набранной фразы).
   const speechAnchorRef = useRef<{ before: string; after: string } | null>(null);
-  const [voiceTimer, setVoiceTimer] = useState(0);   // секунды записи для индикатора
+  const [voiceTimer, setVoiceTimer] = useState(0);
   const speech = useSpeechRecognition({
     onTranscript: (text, isFinal) => {
       const anchor = speechAnchorRef.current;
@@ -96,11 +96,7 @@ export default function AppShell({ user }: { user: User }) {
     setVoiceTimer(0);
     speech.start();
   }, [speech, input]);
-  /** ✓ — стоп, текст оставить в input как есть */
-  const confirmVoice = useCallback(() => {
-    speech.stop();
-  }, [speech]);
-  /** ✗ — стоп, восстановить input до состояния до записи */
+  const confirmVoice = useCallback(() => { speech.stop(); }, [speech]);
   const cancelVoice = useCallback(() => {
     const anchor = speechAnchorRef.current;
     speech.stop();
@@ -110,15 +106,11 @@ export default function AppShell({ user }: { user: User }) {
     }
     speechAnchorRef.current = null;
   }, [speech]);
-  // Таймер: тикает каждую секунду пока listening
   useEffect(() => {
     if (!speech.listening) { setVoiceTimer(0); return; }
     const id = setInterval(() => setVoiceTimer((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, [speech.listening]);
-  // После окончания записи — фокусим textarea, ставим курсор в конец,
-  // авто-ресайзим под распознанный текст. Двойной requestAnimationFrame —
-  // нужен чтобы условный render успел смонтировать textarea заново.
   const wasListeningRef = useRef(false);
   useEffect(() => {
     if (wasListeningRef.current && !speech.listening) {
@@ -127,24 +119,27 @@ export default function AppShell({ user }: { user: User }) {
         if (!ta) return;
         ta.style.height = 'auto';
         ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
-        // Курсор в конец, фокус только на десктопе (на мобильном не зовём
-        // клавиатуру автоматически — юзер сам тапнет если хочет править)
         const len = ta.value.length;
         try { ta.setSelectionRange(len, len); } catch {}
         if (typeof window !== 'undefined' && window.innerWidth >= 768) {
           ta.focus();
         }
-        // Скролл textarea в самый низ если контент длинный
         ta.scrollTop = ta.scrollHeight;
       }));
     }
     wasListeningRef.current = speech.listening;
   }, [speech.listening]);
   // ================================================================
+
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Drawer оставлен только для landscape-телефона как fallback к sidebar.
+  // На обычном портретном мобиле — заменён на MobileTabBar.
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(true);
+  // mobilePane (chat/files/terminal) живёт ВНУТРИ home-таба и переключается из topbar.
   const [mobilePane, setMobilePane] = useState<'chat' | 'files' | 'terminal'>('chat');
+  // Главная мобильная навигация: bottom-tab-bar (Home/Chats/Devices/Settings).
+  const [mobileTab, setMobileTab] = useState<MobileTab>('home');
   const [showAddDevice, setShowAddDevice] = useState(false);
   const [showAddProject, setShowAddProject] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -238,6 +233,16 @@ export default function AppShell({ user }: { user: User }) {
   }
   function toggleProject(pid: string) {
     const n = new Set(expanded); if (n.has(pid)) n.delete(pid); else n.add(pid); setExpanded(n);
+  }
+
+  /** Создать новый проект из device + path (вызывается из DeviceSheet → DeviceBrowser). */
+  async function createProjectFromBrowse(deviceId: string, path: string) {
+    const name = path.split('/').filter(Boolean).pop() || 'project';
+    const r = await fetch('/api/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, device_id: deviceId, path }),
+    });
+    if (r.ok) { const j = await r.json(); setActiveProjectId(j.id); loadProjects(); setMobileTab('home'); }
   }
 
   const handleSlash = useCallback(async (text: string): Promise<boolean> => {
@@ -347,10 +352,6 @@ export default function AppShell({ user }: { user: User }) {
       }
       if (newSid && newSid !== activeSessionId) { setActiveSessionId(newSid); loadSessions(); } else loadSessions();
     } catch (e: any) {
-      // Если браузер (мобильный!) порвал SSE при переходе в другое приложение,
-      // backend продолжает выполнять задачу. Не путаем пользователя ❌ — вместо
-      // этого убираем пустой placeholder, чтобы поллинг (/api/sessions/:id/job)
-      // показал прогресс и подхватил финальный ответ из БД.
       const isNetLikeError =
         e?.name === 'AbortError' ||
         /load failed|networkerror|network error|failed to fetch|connection|aborted|stream/i.test(String(e?.message || ''));
@@ -367,14 +368,10 @@ export default function AppShell({ user }: { user: User }) {
     } finally { setSending(false); }
   }, [sending, activeProjectId, activeSessionId, model, permissionMode, effort, handleSlash]);
 
-  // Когда вкладка снова становится видимой (вернулся в браузер),
-  // если есть активная сессия — сразу подтянем свежие сообщения и прогресс job'а,
-  // не ждём следующего 2-секундного тика поллинга.
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
       if (activeSessionId) {
-        // тихий refresh: подтягиваем сообщения и заново опрашиваем job
         fetch(`/api/sessions?id=${activeSessionId}`)
           .then(r => r.ok ? r.json() : null)
           .then(j => { if (j?.messages) setMessages(j.messages); })
@@ -398,8 +395,6 @@ export default function AppShell({ user }: { user: User }) {
       }
       if (e.key === 'Escape') { setSlashOpen(false); return; }
     }
-    // Enter = новая строка (поведение textarea по умолчанию).
-    // Отправка только по кнопке или Cmd/Ctrl+Enter (удобно на desktop).
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       sendMessage(input);
@@ -421,10 +416,135 @@ export default function AppShell({ user }: { user: User }) {
   }, {} as Record<string, Session[]>);
   const onlineCount = devices.filter(d => d.online).length;
 
+  // Бейджик «новых» чатов на bottom-bar — пока показываем общее число чатов,
+  // если их немного. Будущая итерация: считать только непрочитанные.
+  const tabBarBadges = useMemo(() => ({
+    devices: devices.filter(d => d.online && d.agent_logged_in === false).length || undefined,
+  }), [devices]);
+
+  /** Открыть чат + переключиться на home-таб (мобила) + закрыть drawer (если открыт). */
+  const openSession = useCallback((sid: string, projId: string | null) => {
+    if (projId) setActiveProjectId(projId);
+    setActiveSessionId(sid);
+    setMobilePane('chat');
+    setMobileTab('home');
+    setDrawerOpen(false);
+  }, []);
+
+  /** Открыть проект (новая сессия). */
+  const openProject = useCallback((pid: string) => {
+    setActiveProjectId(pid);
+    setActiveSessionId(null);
+    setMobilePane('chat');
+    setMobileTab('home');
+    setDrawerOpen(false);
+    if (!expanded.has(pid)) {
+      const n = new Set(expanded); n.add(pid); setExpanded(n);
+    }
+  }, [expanded]);
+
+  // === Mobile-only secondary panes ==================================
+  // Содержимое для каждой вкладки нижнего бара.
+  const mobileChatsPane = (
+    <div className="flex flex-col h-full" style={{ background: 'var(--bg)' }}>
+      <div className="px-4 py-3 flex items-center justify-between"
+        style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="text-[15px] font-semibold">Чаты</div>
+        <div className="font-mono text-[11px]" style={{ color: 'var(--muted)' }}>
+          {sessions.length} {sessions.length === 1 ? 'чат' : 'чатов'}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {sessions.length === 0 ? (
+          <EmptyState
+            icon={MessagesSquare}
+            title="Ни одного чата"
+            subtitle={
+              projects.length === 0
+                ? 'Сначала создай проект, потом сможешь начать чат'
+                : 'Открой проект и напиши первое сообщение'
+            }
+            actionLabel={projects.length === 0 ? 'Создать проект' : 'Открыть Home'}
+            onAction={() => {
+              if (projects.length === 0) setShowAddProject(true);
+              else setMobileTab('home');
+            }}
+          />
+        ) : (
+          <div className="p-3 space-y-1">
+            {sessions.map((s) => {
+              const proj = projects.find(p => p.id === s.project_id);
+              const dev = proj ? devices.find(d => d.id === proj.device_id) : null;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => openSession(s.id, proj?.id || null)}
+                  className="w-full flex items-start gap-3 px-3 py-3 rounded-xl text-left"
+                  style={{
+                    background: activeSessionId === s.id ? 'var(--accent-tint)' : 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    minHeight: 44,
+                  }}
+                >
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ background: 'var(--accent-light)', border: '1px solid var(--border)' }}
+                  >
+                    <MessageSquare size={16} style={{ color: 'var(--muted)' }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[14px] font-medium truncate">{s.title}</div>
+                    <div className="font-mono text-[11px] mt-0.5 truncate" style={{ color: 'var(--muted)' }}>
+                      {proj?.name || '—'}
+                      {dev ? ` @ ${dev.name}` : ''}
+                      {' · '}
+                      {new Date(s.updated_at).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const mobileDevicesPane = (
+    <DevicesList
+      devices={devices as any}
+      onOpen={(d) => setOpenDeviceId(d.id)}
+      onAdd={() => setShowAddDevice(true)}
+      onReload={loadDevices}
+    />
+  );
+
+  const mobileSettingsPane = (
+    <Settings
+      user={user}
+      theme={theme}
+      onThemeChange={setThemeAnd}
+      onClose={() => {}}
+      embedded
+    />
+  );
+
+  // На мобиле, если выбран не-home таб — рендерим только этот pane (без сайдбара/композера).
+  const renderMobileSecondaryTab = () => {
+    if (mobileTab === 'chats') return mobileChatsPane;
+    if (mobileTab === 'devices') return mobileDevicesPane;
+    if (mobileTab === 'settings') return mobileSettingsPane;
+    return null;
+  };
+
+  // Padding для основного контента, чтобы он не залезал под bottom-tab-bar на мобиле.
+  // Высота bar = 54px + safe-area.
+  const MOBILE_BAR_PAD = 'pb-[calc(54px+env(safe-area-inset-bottom,0px))] md:pb-0';
+
   return (
     <div className="h-dvh flex flex-col md:flex-row" style={{ background: 'var(--bg)', color: 'var(--fg)' }}>
 
-      {/* ============ SIDEBAR ============ */}
+      {/* ============ SIDEBAR (desktop + landscape-mobile drawer) ============ */}
       <aside className={`${drawerOpen ? 'fixed inset-y-0 left-0 z-50 w-[82%] max-w-[320px] shadow-2xl animate-slideUp md:animate-none' : 'hidden'} md:relative md:flex md:w-[260px] flex-col shrink-0`}
         style={{ background: 'var(--bg-2)', borderRight: '1px solid var(--border)' }}>
 
@@ -479,16 +599,7 @@ export default function AppShell({ user }: { user: User }) {
                     style={{ color: isActive ? 'rgba(255,255,255,.5)' : 'var(--muted)' }}>
                     {isOpen ? '▾' : '▸'}
                   </button>
-                  <button onClick={() => {
-                    setActiveProjectId(p.id);
-                    setActiveSessionId(null);
-                    setDrawerOpen(false);
-                    setMobilePane('chat');
-                    // Раскрываем проект чтобы сразу были видны сессии для выбора.
-                    if (!expanded.has(p.id)) {
-                      const n = new Set(expanded); n.add(p.id); setExpanded(n);
-                    }
-                  }}
+                  <button onClick={() => openProject(p.id)}
                     className="flex-1 text-left text-[13px] truncate min-w-0">{p.name}</button>
                   {device && (
                     <span className="font-mono text-[9.5px] px-1.5 py-px rounded shrink-0"
@@ -506,7 +617,7 @@ export default function AppShell({ user }: { user: User }) {
                 </div>
                 {isOpen && (
                   <div className="ml-1 mt-0.5 mb-1">
-                    <button onClick={() => { setActiveProjectId(p.id); setActiveSessionId(null); setDrawerOpen(false); setMobilePane('chat'); }}
+                    <button onClick={() => openProject(p.id)}
                       className="w-full flex items-center gap-1.5 px-2 py-1 text-[11.5px] rounded-md hover:bg-[var(--surface-2)]"
                       style={{ color: 'var(--muted)' }}>
                       <span className="font-mono w-3 inline-block">{plist.length === 0 ? '└─' : '├─'}</span>
@@ -523,7 +634,7 @@ export default function AppShell({ user }: { user: User }) {
                             fontWeight: isActiveSession ? 500 : 400,
                           }}>
                           <span className="font-mono text-[11px] w-3 inline-block" style={{ color: 'var(--muted)' }}>{isLast ? '└─' : '├─'}</span>
-                          <button onClick={() => { setActiveSessionId(s.id); setActiveProjectId(p.id); setDrawerOpen(false); setMobilePane('chat'); }}
+                          <button onClick={() => openSession(s.id, p.id)}
                             className="flex-1 text-left truncate text-[12px]">{s.title}</button>
                           <button onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
                             className="opacity-0 group-hover:opacity-100" style={{ color: 'var(--muted)' }}>
@@ -623,31 +734,77 @@ export default function AppShell({ user }: { user: User }) {
         </div>
       </aside>
 
-      {/* ============ CENTER ============ */}
-      <main className={`flex-1 flex flex-col min-w-0 min-h-0 ${mobilePane !== 'chat' ? 'hidden md:flex' : 'flex'}`}>
+      {/* === Mobile non-home tab — рендерим вместо main + всего остального === */}
+      {mobileTab !== 'home' && (
+        <div className={`md:hidden flex-1 min-h-0 flex flex-col ${MOBILE_BAR_PAD}`}>
+          {renderMobileSecondaryTab()}
+        </div>
+      )}
 
-        {/* Topbar — prompt-style breadcrumb */}
-        <div className="flex items-center justify-between gap-3 px-4 py-2.5"
+      {/* ============ CENTER (HOME / DESKTOP-ALWAYS) ============ */}
+      <main
+        className={`flex-1 flex flex-col min-w-0 min-h-0 ${MOBILE_BAR_PAD}
+          ${mobilePane !== 'chat' ? 'hidden md:flex' : 'flex'}
+          ${mobileTab !== 'home' ? 'hidden md:flex' : ''}`}
+      >
+
+        {/* === Topbar — breadcrumb-style === */}
+        <div className="flex items-center justify-between gap-2 px-3 md:px-4 py-2.5"
           style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg)' }}>
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <button onClick={() => setDrawerOpen(true)} className="md:hidden btn btn-icon btn-ghost">
-              <Menu size={18} />
-            </button>
-            <div className="font-mono text-[13px] flex items-baseline gap-1.5 min-w-0">
-              <span style={{ color: 'var(--muted)' }}>~</span>
-              <span className="truncate" style={{ fontWeight: 500 }}>{activeProject?.name || 'autmzr-command'}</span>
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            {/* Back / drawer кнопка.
+                На мобиле: если выбран чат — ◀ возвращает к welcome (clear session).
+                            если открыт проект без чата — ◀ закрывает проект.
+                            иначе — ☰ (drawer для landscape). */}
+            {activeSessionId ? (
+              <button
+                onClick={() => { setActiveSessionId(null); setMessages([]); setTools([]); }}
+                className="md:hidden w-10 h-10 rounded-md inline-flex items-center justify-center"
+                style={{ color: 'var(--fg-2)' }}
+                aria-label="Назад к проекту"
+              >
+                <ArrowLeft size={18} />
+              </button>
+            ) : activeProjectId ? (
+              <button
+                onClick={() => setActiveProjectId(null)}
+                className="md:hidden w-10 h-10 rounded-md inline-flex items-center justify-center"
+                style={{ color: 'var(--fg-2)' }}
+                aria-label="Назад к Home"
+              >
+                <ArrowLeft size={18} />
+              </button>
+            ) : (
+              <button onClick={() => setDrawerOpen(true)} className="md:hidden btn btn-icon btn-ghost"
+                aria-label="Меню">
+                <Menu size={18} />
+              </button>
+            )}
+
+            {/* Breadcrumb. Мобила: компактный (Project · Sonnet). Desktop: с devices. */}
+            <div className="font-mono text-[13px] flex items-baseline gap-1.5 min-w-0 flex-1">
+              <span className="hidden md:inline" style={{ color: 'var(--muted)' }}>~</span>
+              <span className="truncate" style={{ fontWeight: 500 }}>
+                {activeProject?.name || 'autmzr-command'}
+              </span>
               {activeDevice && (
                 <span className="text-[11.5px] flex items-center gap-1 shrink-0" style={{ color: 'var(--muted)' }}>
-                  <span>@</span>
+                  <span>·</span>
                   <span className="inline-block w-[6px] h-[6px] rounded-full"
                     style={{ background: activeDevice.online ? 'var(--ok)' : 'var(--danger)' }} />
-                  <span>{activeDevice.name}</span>
+                  <span className="hidden md:inline">{activeDevice.name}</span>
+                </span>
+              )}
+              {/* Модель в крошках на мобиле */}
+              {activeProjectId && (
+                <span className="md:hidden text-[11px]" style={{ color: 'var(--muted)' }}>
+                  · {(MODELS.find(m => m.value === model)?.label || 'Sonnet').split(' ')[0].toLowerCase()}
                 </span>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            {/* Landscape-phone: компактный pane-switcher (chat/files/terminal), т.к. bottom nav скрыт */}
+          <div className="flex items-center gap-1">
+            {/* Landscape-phone: компактный pane-switcher (chat/files/terminal) */}
             {activeProject && (
               <div className="hidden short:flex md:short:hidden items-center gap-0.5 mr-1 rounded-md overflow-hidden"
                 style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}>
@@ -672,14 +829,13 @@ export default function AppShell({ user }: { user: User }) {
                 })}
               </div>
             )}
-            {/* Mobile-only: модель + цветной индикатор режима. Tap → шторка настроек. */}
+            {/* Mobile-only: режим (цветной индикатор) — tap → шторка настроек чата */}
             {activeProjectId && (
               <button type="button" onClick={() => setMobileSheetOpen(true)}
-                className="md:hidden font-mono inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] shrink-0"
-                style={{ background: 'var(--surface)', color: 'var(--fg)', border: '1px solid var(--border)' }}
-                aria-label={`Модель: ${model}, режим: ${permissionMode}`}
+                className="md:hidden font-mono inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] shrink-0"
+                style={{ background: 'var(--surface)', color: 'var(--fg)', border: '1px solid var(--border)', minHeight: 36 }}
+                aria-label={`Режим: ${permissionMode}`}
                 title={permissionMode}>
-                <span>{(MODELS.find(m => m.value === model)?.label || 'Sonnet').split(' ')[0]}</span>
                 <span className="inline-block w-[7px] h-[7px] rounded-full"
                   style={{
                     background:
@@ -688,16 +844,26 @@ export default function AppShell({ user }: { user: User }) {
                       permissionMode === 'plan' ? '#7c8ef0' :
                       'var(--muted)',
                   }} />
+                <span>mode</span>
               </button>
             )}
             {activeProjectId && (
               <button onClick={() => { setActiveSessionId(null); setMessages([]); setTools([]); }}
                 className="font-mono inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px]"
-                style={{ background: 'var(--accent)', color: 'var(--bg)', border: '1px solid var(--accent)' }}>
+                style={{ background: 'var(--accent)', color: 'var(--bg)', border: '1px solid var(--accent)', minHeight: 36 }}>
                 <Plus size={11} /> Чат
                 <span className="hidden md:inline text-[9.5px] px-1 py-px rounded" style={{ background: 'rgba(255,255,255,.14)' }}>⌘N</span>
               </button>
             )}
+            {/* Settings — иконка справа, открывает desktop-модалку */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="hidden md:inline-flex w-9 h-9 rounded-md items-center justify-center"
+              style={{ background: 'var(--surface)', color: 'var(--fg-2)', border: '1px solid var(--border)' }}
+              aria-label="Settings"
+            >
+              <SettingsIcon size={14} />
+            </button>
             <button onClick={() => setRightOpen(!rightOpen)}
               className="hidden md:inline-flex font-mono items-center gap-1 px-2.5 py-1 rounded-md text-[12px]"
               style={{ background: 'var(--surface)', color: 'var(--fg)', border: '1px solid var(--border)' }}>
@@ -710,7 +876,7 @@ export default function AppShell({ user }: { user: User }) {
         {/* Messages / Welcome */}
         <div className="flex-1 overflow-y-auto">
 
-          {/* WELCOME — no project */}
+          {/* WELCOME — no project: компактная сводка вместо списка девайсов */}
           {messages.length === 0 && !activeSessionId && !runningJob && !activeProject && (
             <div className="animate-fadeIn">
               <div className="max-w-3xl mx-auto px-6 py-10">
@@ -727,144 +893,115 @@ export default function AppShell({ user }: { user: User }) {
                   <span>{sessions.length} чатов</span>
                 </p>
 
-                {/* Stats grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 rounded-xl overflow-hidden mb-7"
-                  style={{ border: '1px solid var(--border)', background: 'var(--bg)' }}>
-                  {[
-                    { k: 'Устройств', v: `${onlineCount}/${devices.length || 0}`, sub: devices.length === 0 ? 'нет подключений' : 'online' },
-                    { k: 'Проектов', v: projects.length.toString(), sub: projects.length === 0 ? 'создай первый' : 'на устройствах' },
-                    { k: 'Чатов', v: sessions.length.toString(), sub: sessions.length > 0 ? 'всего' : 'пока пусто' },
-                    { k: 'Модель', v: MODELS.find(m => m.value === model)?.label || model, sub: `effort: ${effort}` },
-                  ].map((c, i) => (
-                    <div key={i} className="px-4 py-3"
-                      style={{
-                        borderRight: (i % 4) < 3 ? '1px solid var(--border)' : undefined,
-                        borderTop: i >= 2 ? '1px solid var(--border)' : undefined,
-                      }}>
-                      <div className="font-mono text-[10.5px] uppercase tracking-[0.08em]" style={{ color: 'var(--muted)' }}>{c.k}</div>
-                      <div className="font-mono text-[20px] font-medium leading-none mt-1.5 tracking-tight">{c.v}</div>
-                      <div className="font-mono text-[11px] mt-1" style={{ color: 'var(--muted)' }}>{c.sub}</div>
+                {/* Empty states / quick actions, в зависимости от состояния */}
+                {devices.length === 0 ? (
+                  <EmptyState
+                    icon={MonitorSmartphone}
+                    title="Подключи первое устройство"
+                    subtitle="Сервер или комп с установленным claude cli — одной командой в терминале."
+                    actionLabel="Подключить устройство"
+                    onAction={() => setShowAddDevice(true)}
+                  />
+                ) : projects.length === 0 ? (
+                  <EmptyState
+                    icon={FolderOpen}
+                    title="Создай первый проект"
+                    subtitle="Открой папку на одном из подключённых устройств."
+                    actionLabel="Создать проект"
+                    onAction={() => setShowAddProject(true)}
+                    secondaryHint={`${onlineCount}/${devices.length} устройств готовы`}
+                  />
+                ) : (
+                  <>
+                    {/* Compact summary — без огромных списков */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 rounded-xl overflow-hidden mb-6"
+                      style={{ border: '1px solid var(--border)', background: 'var(--bg)' }}>
+                      {[
+                        { k: 'Устройств', v: `${onlineCount}/${devices.length || 0}`, sub: 'online' },
+                        { k: 'Проектов', v: projects.length.toString(), sub: 'на устройствах' },
+                        { k: 'Чатов', v: sessions.length.toString(), sub: sessions.length > 0 ? 'всего' : 'пока пусто' },
+                        { k: 'Модель', v: MODELS.find(m => m.value === model)?.label || model, sub: `effort: ${effort}` },
+                      ].map((c, i) => (
+                        <div key={i} className="px-4 py-3"
+                          style={{
+                            borderRight: (i % 4) < 3 ? '1px solid var(--border)' : undefined,
+                            borderTop: i >= 2 ? '1px solid var(--border)' : undefined,
+                          }}>
+                          <div className="font-mono text-[10.5px] uppercase tracking-[0.08em]" style={{ color: 'var(--muted)' }}>{c.k}</div>
+                          <div className="font-mono text-[20px] font-medium leading-none mt-1.5 tracking-tight">{c.v}</div>
+                          <div className="font-mono text-[11px] mt-1" style={{ color: 'var(--muted)' }}>{c.sub}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
 
-                {/* Devices */}
-                <div className="mb-7">
-                  <div className="flex items-center justify-between pb-2 mb-2" style={{ borderBottom: '1px solid var(--border)' }}>
-                    <div className="font-mono text-[11px] uppercase tracking-[0.1em]">
-                      <span style={{ color: 'var(--muted)' }}># </span>devices
-                    </div>
-                    <button onClick={() => setShowAddDevice(true)} className="font-mono text-[11px] hover:underline" style={{ color: 'var(--muted)' }}>
-                      + подключить
-                    </button>
-                  </div>
-                  {devices.length === 0 ? (
-                    <button onClick={() => setShowAddDevice(true)}
-                      className="w-full text-left px-4 py-4 rounded-lg hover:bg-[var(--surface)]"
-                      style={{ border: '1px dashed var(--border-strong)' }}>
-                      <div className="text-[13.5px] font-medium">Подключи первое устройство</div>
-                      <div className="font-mono text-[11.5px] mt-0.5" style={{ color: 'var(--muted)' }}>
-                        сервер или комп с установленным claude cli
+                    {/* Projects (list) */}
+                    <div className="mb-7">
+                      <div className="flex items-center justify-between pb-2 mb-2" style={{ borderBottom: '1px solid var(--border)' }}>
+                        <div className="font-mono text-[11px] uppercase tracking-[0.1em]">
+                          <span style={{ color: 'var(--muted)' }}># </span>projects
+                          <span className="ml-2" style={{ color: 'var(--muted)' }}>{projects.length}</span>
+                        </div>
+                        <button onClick={() => setShowAddProject(true)} className="font-mono text-[11px] hover:underline" style={{ color: 'var(--muted)' }}>
+                          + создать
+                        </button>
                       </div>
-                    </button>
-                  ) : (
-                    <div className="space-y-px">
-                      {devices.map((d, idx) => {
-                        const isLast = idx === devices.length - 1;
-                        return (
-                          <button key={d.id} onClick={() => setOpenDeviceId(d.id)}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--surface)] text-left">
-                            <span className="font-mono text-[12px] w-4 shrink-0" style={{ color: 'var(--muted)' }}>{isLast ? '└─' : '├─'}</span>
-                            <span className="font-mono text-[10px] shrink-0"
-                              style={{ color: d.online ? 'var(--ok)' : 'var(--danger)' }}>{d.online ? '●' : '○'}</span>
-                            <span className="text-[13px] font-medium truncate">{d.name}</span>
-                            <span className="font-mono text-[10.5px] shrink-0" style={{ color: 'var(--muted)' }}>
-                              {d.os || '—'}/{d.arch || '—'}
-                            </span>
-                            {d.root_path && (
-                              <span className="font-mono text-[10.5px] truncate ml-auto opacity-80" style={{ color: 'var(--muted)' }}>
-                                {d.root_path}
-                              </span>
-                            )}
-                            {d.online && d.agent_logged_in === false && (
-                              <span className="font-mono text-[10.5px] shrink-0" style={{ color: 'var(--warn)' }}>⚠ no_login</span>
-                            )}
-                            <span className="font-mono text-[11px] shrink-0 opacity-40 group-hover:opacity-100" style={{ color: 'var(--muted)' }}>→</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Projects */}
-                <div className="mb-7">
-                  <div className="flex items-center justify-between pb-2 mb-2" style={{ borderBottom: '1px solid var(--border)' }}>
-                    <div className="font-mono text-[11px] uppercase tracking-[0.1em]">
-                      <span style={{ color: 'var(--muted)' }}># </span>projects
-                      <span className="ml-2" style={{ color: 'var(--muted)' }}>{projects.length}</span>
-                    </div>
-                    <button onClick={() => setShowAddProject(true)} className="font-mono text-[11px] hover:underline" style={{ color: 'var(--muted)' }}>
-                      + создать
-                    </button>
-                  </div>
-                  {projects.length === 0 ? (
-                    <button onClick={() => setShowAddProject(true)}
-                      disabled={devices.length === 0}
-                      className="w-full text-left px-4 py-4 rounded-lg hover:bg-[var(--surface)] disabled:opacity-50"
-                      style={{ border: '1px dashed var(--border-strong)' }}>
-                      <div className="text-[13.5px] font-medium">Открой папку с проектом или создай новый</div>
-                    </button>
-                  ) : (
-                    <div className="space-y-px">
-                      {projects.slice(0, 6).map((p, idx) => {
-                        const dev = devices.find(d => d.id === p.device_id);
-                        const isLast = idx === Math.min(projects.length, 6) - 1;
-                        return (
-                          <button key={p.id}
-                            onClick={() => { setActiveProjectId(p.id); setActiveSessionId(null); }}
-                            className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--surface)] text-left">
-                            <span className="font-mono text-[12px] w-4 shrink-0" style={{ color: 'var(--muted)' }}>{isLast ? '└─' : '├─'}</span>
-                            <span className="text-[13px] font-medium truncate">{p.name}</span>
-                            {dev && (
-                              <span className="font-mono text-[10px] px-1.5 py-px rounded shrink-0"
-                                style={{ background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)' }}>
-                                <span style={{ color: dev.online ? 'var(--ok)' : 'var(--danger)' }}>●</span> {dev.name}
-                              </span>
-                            )}
-                            <span className="font-mono text-[10.5px] truncate ml-auto opacity-80" style={{ color: 'var(--muted)' }}>{p.path || 'sandbox'}</span>
-                            <span className="font-mono text-[11px] shrink-0" style={{ color: 'var(--muted)' }}>→</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Recent chats */}
-                {sessions.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between pb-2 mb-2" style={{ borderBottom: '1px solid var(--border)' }}>
-                      <div className="font-mono text-[11px] uppercase tracking-[0.1em]">
-                        <span style={{ color: 'var(--muted)' }}># </span>recent_chats
+                      <div className="space-y-px">
+                        {projects.slice(0, 6).map((p, idx) => {
+                          const dev = devices.find(d => d.id === p.device_id);
+                          const isLast = idx === Math.min(projects.length, 6) - 1;
+                          return (
+                            <button key={p.id}
+                              onClick={() => openProject(p.id)}
+                              className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--surface)] text-left">
+                              <span className="font-mono text-[12px] w-4 shrink-0" style={{ color: 'var(--muted)' }}>{isLast ? '└─' : '├─'}</span>
+                              <span className="text-[13px] font-medium truncate">{p.name}</span>
+                              {dev && (
+                                <span className="font-mono text-[10px] px-1.5 py-px rounded shrink-0"
+                                  style={{ background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)' }}>
+                                  <span style={{ color: dev.online ? 'var(--ok)' : 'var(--danger)' }}>●</span> {dev.name}
+                                </span>
+                              )}
+                              <span className="font-mono text-[10.5px] truncate ml-auto opacity-80" style={{ color: 'var(--muted)' }}>{p.path || 'sandbox'}</span>
+                              <span className="font-mono text-[11px] shrink-0" style={{ color: 'var(--muted)' }}>→</span>
+                            </button>
+                          );
+                        })}
                       </div>
-                      <span className="font-mono text-[11px]" style={{ color: 'var(--muted)' }}>{Math.min(sessions.length, 6)} of {sessions.length}</span>
                     </div>
-                    <div className="space-y-px">
-                      {sessions.slice(0, 6).map((s, idx) => {
-                        const proj = projects.find(p => p.id === s.project_id);
-                        const isLast = idx === Math.min(sessions.length, 6) - 1;
-                        return (
-                          <button key={s.id}
-                            onClick={() => { if (proj) setActiveProjectId(proj.id); setActiveSessionId(s.id); }}
-                            className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded hover:bg-[var(--surface)] text-left">
-                            <span className="font-mono text-[12px] w-4 shrink-0" style={{ color: 'var(--muted)' }}>{isLast ? '└─' : '├─'}</span>
-                            <span className="text-[12.5px] truncate">{s.title}</span>
-                            {proj && <span className="font-mono text-[10.5px] ml-auto shrink-0" style={{ color: 'var(--muted)' }}>{proj.name}</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
+
+                    {/* Recent chats */}
+                    {sessions.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between pb-2 mb-2" style={{ borderBottom: '1px solid var(--border)' }}>
+                          <div className="font-mono text-[11px] uppercase tracking-[0.1em]">
+                            <span style={{ color: 'var(--muted)' }}># </span>recent_chats
+                          </div>
+                          <span className="font-mono text-[11px]" style={{ color: 'var(--muted)' }}>{Math.min(sessions.length, 6)} of {sessions.length}</span>
+                        </div>
+                        <div className="space-y-px">
+                          {sessions.slice(0, 6).map((s, idx) => {
+                            const proj = projects.find(p => p.id === s.project_id);
+                            const isLast = idx === Math.min(sessions.length, 6) - 1;
+                            return (
+                              <button key={s.id}
+                                onClick={() => openSession(s.id, proj?.id || null)}
+                                className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded hover:bg-[var(--surface)] text-left">
+                                <span className="font-mono text-[12px] w-4 shrink-0" style={{ color: 'var(--muted)' }}>{isLast ? '└─' : '├─'}</span>
+                                <span className="text-[12.5px] truncate">{s.title}</span>
+                                {proj && <span className="font-mono text-[10.5px] ml-auto shrink-0" style={{ color: 'var(--muted)' }}>{proj.name}</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Подсказка про девайсы (всегда внизу welcome) */}
+                {devices.length > 0 && (
+                  <div className="mt-7 font-mono text-[11.5px] text-center" style={{ color: 'var(--muted)' }}>
+                    Управление устройствами — во вкладке <span style={{ color: 'var(--fg-2)' }}>Devices</span>
                   </div>
                 )}
               </div>
@@ -918,8 +1055,8 @@ export default function AppShell({ user }: { user: User }) {
                   ))}
                 </div>
 
-                {/* История чатов этого проекта — сразу видна, не прячется под ▸ */}
-                {(sessionsByProject[activeProject.id] || []).length > 0 && (
+                {/* История чатов этого проекта */}
+                {(sessionsByProject[activeProject.id] || []).length > 0 ? (
                   <div className="mt-7">
                     <div className="flex items-center justify-between pb-2 mb-2"
                       style={{ borderBottom: '1px solid var(--border)' }}>
@@ -935,7 +1072,7 @@ export default function AppShell({ user }: { user: User }) {
                         const isLast = idx === arr.length - 1;
                         return (
                           <button key={s.id}
-                            onClick={() => { setActiveSessionId(s.id); setMobilePane('chat'); }}
+                            onClick={() => openSession(s.id, activeProject.id)}
                             className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--surface)] text-left group">
                             <span className="font-mono text-[12px] w-4 shrink-0" style={{ color: 'var(--muted)' }}>{isLast ? '└─' : '├─'}</span>
                             <span className="text-[13px] truncate flex-1">{s.title}</span>
@@ -946,6 +1083,17 @@ export default function AppShell({ user }: { user: User }) {
                           </button>
                         );
                       })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-7 text-center py-6 px-4 rounded-xl"
+                    style={{ border: '1px dashed var(--border-strong)', color: 'var(--muted)' }}>
+                    <MessageSquare size={20} className="mx-auto mb-2" style={{ opacity: 0.6 }} />
+                    <div className="text-[13px] font-medium mb-0.5" style={{ color: 'var(--fg-2)' }}>
+                      Напиши первое сообщение
+                    </div>
+                    <div className="font-mono text-[11px]">
+                      Используй composer ниже или один из quick_prompts
                     </div>
                   </div>
                 )}
@@ -1028,9 +1176,7 @@ export default function AppShell({ user }: { user: User }) {
           </div>
         </div>
 
-        {/* Composer — prompt-style.
-            safe-area на mobile обрабатывает bottom-nav (ниже). Здесь safe-bottom включаем
-            только если проект не выбран (тогда nav скрыт и composer — последний элемент). */}
+        {/* Composer */}
         <div className={`shrink-0 px-4 md:px-8 pt-3 pb-4 ${!activeProject ? 'safe-bottom' : ''}`}
           style={{ borderTop: '1px solid var(--border)', background: 'var(--bg)' }}>
           <div className="max-w-3xl mx-auto relative">
@@ -1063,7 +1209,7 @@ export default function AppShell({ user }: { user: User }) {
               </div>
             )}
 
-            {/* Voice error — показываем когда не listening (если запись активна, ошибка вылезет позже) */}
+            {/* Voice error */}
             {!speech.listening && speech.error && (
               <div className="flex items-center gap-2 px-3 mb-1.5 text-[12px]"
                 style={{ color: 'var(--danger)' }}>
@@ -1071,34 +1217,24 @@ export default function AppShell({ user }: { user: User }) {
               </div>
             )}
 
-            {/* Input row — режим ChatGPT-voice или обычный композер */}
+            {/* Input row */}
             {speech.listening ? (
-              /* === Voice recording mode (ChatGPT-style) ===
-                 Иконки минимальные: тонкий stroke, без фона, нейтральный цвет.
-                 Никаких pulse / красных подложек — это раздражает. */
               <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-2 md:py-2.5 rounded-[24px] md:rounded-xl voice-rec-bar"
                 style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)' }}>
-                {/* ✗ Cancel — discard transcript */}
                 <button type="button" onClick={cancelVoice}
                   className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-black/5"
                   style={{ color: 'var(--fg-2)' }}
                   aria-label="Отмена">
                   <X size={20} strokeWidth={1.6} />
                 </button>
-
-                {/* Waveform — много тонких баров с псевдо-аудио-уровнем */}
                 <div className="flex-1 flex items-center justify-center gap-[2px] h-10 voice-waveform overflow-hidden">
                   {Array.from({ length: 36 }).map((_, i) => (
                     <span key={i} className="voice-bar" style={{ animationDelay: `${(i * 53) % 1000}ms` }} />
                   ))}
                 </div>
-
-                {/* Timer */}
                 <span className="font-mono text-[12.5px] tabular-nums shrink-0 px-1" style={{ color: 'var(--muted)' }}>
                   {formatVoiceTimer(voiceTimer)}
                 </span>
-
-                {/* ✓ Confirm — keep transcript. Тоже минимальная иконка. */}
                 <button type="button" onClick={confirmVoice}
                   className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-black/5"
                   style={{ color: 'var(--fg)' }}
@@ -1107,18 +1243,15 @@ export default function AppShell({ user }: { user: User }) {
                 </button>
               </div>
             ) : (
-              /* === Normal composer === */
               <div className="flex items-end gap-1.5 md:gap-2.5 px-1.5 md:px-3 py-1.5 md:py-2.5 rounded-[24px] md:rounded-xl"
                 style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)' }}>
-                {/* + — открывает mobile sheet с настройками + tools. На desktop прячем. */}
                 <button type="button" onClick={() => setMobileSheetOpen(true)}
                   disabled={!activeProjectId}
                   className="md:hidden w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30 shrink-0"
                   style={{ color: mobileSheetOpen ? 'var(--bg)' : 'var(--fg-2)', background: mobileSheetOpen ? 'var(--accent)' : 'transparent' }}
-                  aria-label="Настройки">
+                  aria-label="Настройки чата">
                   <Plus size={22} />
                 </button>
-                {/* $ prompt — только на desktop */}
                 <span className="hidden md:inline font-mono text-[14px] pt-[3px] shrink-0" style={{ color: 'var(--muted)' }}>$</span>
                 <textarea ref={taRef} value={input}
                   onChange={(e) => { setInput(e.target.value); setSlashOpen(e.target.value.startsWith('/')); setSlashIdx(0); }}
@@ -1127,7 +1260,6 @@ export default function AppShell({ user }: { user: User }) {
                   placeholder={!activeProjectId ? 'Выбери проект…' : sending ? 'Жду ответ…' : 'Сообщение…'}
                   className="flex-1 bg-transparent outline-none resize-none text-[16px] md:text-[14px] leading-[1.4] placeholder:opacity-50 py-2 md:pt-0.5"
                   style={{ maxHeight: 200 }} />
-                {/* Кнопка справа: Mic если пусто, Send если есть текст */}
                 {input.trim().length === 0 && !sending ? (
                   <button type="button"
                     onClick={startVoice}
@@ -1149,7 +1281,7 @@ export default function AppShell({ user }: { user: User }) {
               </div>
             )}
 
-            {/* Pills row — только на desktop. На mobile модель/режим живут в topbar. */}
+            {/* Pills row — desktop only */}
             <div className="hidden md:flex items-center gap-1.5 mt-2 flex-wrap">
               <ModePill value={permissionMode} onChange={setPermissionMode} />
               <ModelEffortPill model={model} effort={effort} onChange={(m, e) => { setModel(m); setEffort(e); }} />
@@ -1197,8 +1329,8 @@ export default function AppShell({ user }: { user: User }) {
       )}
 
       {/* ============ MOBILE: Files / Terminal full-screen ============ */}
-      {mobilePane === 'files' && activeProject && (
-        <div className="flex-1 min-h-0 md:hidden flex flex-col">
+      {mobileTab === 'home' && mobilePane === 'files' && activeProject && (
+        <div className={`flex-1 min-h-0 md:hidden flex flex-col ${MOBILE_BAR_PAD}`}>
           <div className="flex items-center gap-2 px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
             <button onClick={() => setMobilePane('chat')} className="btn btn-icon btn-ghost"><ArrowLeft size={16} /></button>
             <div className="font-mono text-[12.5px]">files</div>
@@ -1206,8 +1338,8 @@ export default function AppShell({ user }: { user: User }) {
           <div className="flex-1 min-h-0 overflow-hidden"><FileTree projectId={activeProjectId!} onOpenFile={(p) => setOpenFile(p)} /></div>
         </div>
       )}
-      {mobilePane === 'terminal' && activeProject && activeDevice && (
-        <div className="flex-1 min-h-0 md:hidden flex flex-col">
+      {mobileTab === 'home' && mobilePane === 'terminal' && activeProject && activeDevice && (
+        <div className={`flex-1 min-h-0 md:hidden flex flex-col ${MOBILE_BAR_PAD}`}>
           <div className="flex items-center gap-2 px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
             <button onClick={() => setMobilePane('chat')} className="btn btn-icon btn-ghost"><ArrowLeft size={16} /></button>
             <div className="font-mono text-[12.5px]">terminal · {activeDevice.name}</div>
@@ -1224,55 +1356,29 @@ export default function AppShell({ user }: { user: User }) {
         </div>
       )}
 
-      {/* ============ MOBILE bottom tabs ============
-         НЕ fixed! Это обычный flex-item в корневом flex-col на mobile —
-         composer/terminal-input благодаря этому остаются доступны. */}
-      {activeProject && (
-        <nav className="md:hidden short:hidden shrink-0 flex pt-1.5 safe-bottom"
-          style={{ background: 'var(--bg-2)', borderTop: '1px solid var(--border)' }}>
-          {[
-            { id: 'chat', icon: MessageSquare, label: 'chat' },
-            { id: 'files', icon: Files, label: 'files' },
-            { id: 'terminal', icon: TerminalSquare, label: 'terminal' },
-          ].map((t) => {
-            const Icon = t.icon;
-            const active = mobilePane === t.id;
-            return (
-              <button key={t.id} onClick={() => setMobilePane(t.id as any)}
-                className="flex-1 flex flex-col items-center gap-1 py-2.5 relative"
-                style={{ color: active ? 'var(--fg)' : 'var(--muted)' }}>
-                <Icon size={18} />
-                <span className="font-mono text-[10px]">{t.label}</span>
-                {active && <span className="absolute top-0 w-8 h-0.5" style={{ background: 'var(--accent)' }} />}
-              </button>
-            );
-          })}
-        </nav>
-      )}
+      {/* ============ MOBILE BOTTOM-TAB-BAR ============ */}
+      <MobileTabBar
+        active={mobileTab}
+        onChange={(t) => {
+          setMobileTab(t);
+          if (t === 'home') setMobilePane('chat');
+        }}
+        badges={tabBarBadges}
+      />
 
       {drawerOpen && <div className="fixed inset-0 z-40 md:hidden animate-fadeIn"
         style={{ background: 'rgba(0,0,0,.4)' }} onClick={() => setDrawerOpen(false)} />}
 
+      {/* ============ MODALS ============ */}
       {showAddDevice && <DeviceAddModal onClose={() => { setShowAddDevice(false); loadDevices(); }} />}
       {showAddProject && <ProjectCreateModal devices={devices}
         onClose={() => setShowAddProject(false)}
-        onCreated={(id) => { setShowAddProject(false); setActiveProjectId(id); loadProjects(); }} />}
-      {showSettings && <Settings user={user} devices={devices} theme={theme}
+        onCreated={(id) => { setShowAddProject(false); setActiveProjectId(id); loadProjects(); setMobileTab('home'); }} />}
+      {showSettings && <Settings user={user} theme={theme}
         onThemeChange={setThemeAnd}
-        onAddDevice={() => { setShowSettings(false); setShowAddDevice(true); }}
-        onReload={loadDevices}
-        onClose={() => setShowSettings(false)}
-        onCreateProject={async (deviceId, path) => {
-          const name = path.split('/').filter(Boolean).pop() || 'project';
-          const r = await fetch('/api/projects', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, device_id: deviceId, path }),
-          });
-          if (r.ok) { const j = await r.json(); setActiveProjectId(j.id); loadProjects(); }
-        }} />}
+        onClose={() => setShowSettings(false)} />}
 
-      {/* Focused sheet для одного устройства — открывается тапом по девайсу
-          на welcome-экране или в sidebar. Внутри только его статус и действия. */}
+      {/* Focused sheet для одного устройства */}
       {openDeviceId && (() => {
         const d = devices.find(x => x.id === openDeviceId);
         if (!d) return null;
@@ -1281,21 +1387,15 @@ export default function AppShell({ user }: { user: User }) {
           onClose={() => setOpenDeviceId(null)}
           onReload={loadDevices}
           onOpenSettings={() => { setOpenDeviceId(null); setShowSettings(true); }}
-          onCreateProject={async (deviceId, path) => {
-            const name = path.split('/').filter(Boolean).pop() || 'project';
-            const r = await fetch('/api/projects', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name, device_id: deviceId, path }),
-            });
-            if (r.ok) { const j = await r.json(); setActiveProjectId(j.id); loadProjects(); }
-          }}
+          onCreateProject={createProjectFromBrowse}
         />;
       })()}
       {openFile && activeProjectId && (
         <FileEditor projectId={activeProjectId} filePath={openFile} onClose={() => setOpenFile(null)} />
       )}
 
-      {/* Mobile settings sheet — открывается по [+] слева от textarea или по мета-pill под ним */}
+      {/* Mobile chat-settings sheet (mode/model/effort + slash). Files/Terminal убраны
+          — теперь они через bottom-tab-bar (Devices) или /files /terminal slash. */}
       <MobileChatSheet
         open={mobileSheetOpen}
         onClose={() => setMobileSheetOpen(false)}
@@ -1305,16 +1405,61 @@ export default function AppShell({ user }: { user: User }) {
         onModelChange={setModel}
         effort={effort}
         onEffortChange={setEffort}
-        onOpenFiles={() => { setRightTab('files'); setRightOpen(true); setMobilePane('files'); }}
-        onOpenTerminal={() => { setRightTab('terminal'); setRightOpen(true); setMobilePane('terminal'); }}
         onInsertCommand={(text) => {
           setInput(text);
-          // Открываем slash-dropdown и фокусируем textarea — юзер либо сразу жмёт Send,
-          // либо дописывает args (например, для /cd, /! и т.п.)
           setSlashOpen(false);
           setTimeout(() => taRef.current?.focus(), 100);
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * Универсальный empty-state блок — большая иконка + title + subtitle + primary CTA.
+ * Используется во всех «пустых» местах: нет девайсов, нет проектов, нет чатов.
+ */
+function EmptyState({
+  icon: Icon,
+  title,
+  subtitle,
+  actionLabel,
+  onAction,
+  secondaryHint,
+}: {
+  // Используем тип иконки lucide-react — он совместим со всеми экспортируемыми иконками.
+  icon: React.ComponentType<any>;
+  title: string;
+  subtitle: string;
+  actionLabel: string;
+  onAction: () => void;
+  secondaryHint?: string;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
+      <div
+        className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5"
+        style={{ background: 'var(--accent-light)', border: '1px solid var(--border)' }}
+      >
+        <Icon size={36} strokeWidth={1.5} style={{ color: 'var(--muted)' }} />
+      </div>
+      <h2 className="text-lg font-semibold mb-1.5">{title}</h2>
+      <p className="text-[13px] mb-6 max-w-[320px]" style={{ color: 'var(--muted)' }}>
+        {subtitle}
+      </p>
+      <button
+        onClick={onAction}
+        className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-[14px] font-medium"
+        style={{ background: 'var(--accent)', color: 'var(--bg)', minHeight: 44 }}
+      >
+        <Plus size={16} />
+        {actionLabel}
+      </button>
+      {secondaryHint && (
+        <div className="font-mono text-[11px] mt-4" style={{ color: 'var(--muted)' }}>
+          {secondaryHint}
+        </div>
+      )}
     </div>
   );
 }
