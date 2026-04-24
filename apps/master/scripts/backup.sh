@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# pocket-claude DB backup script.
-# Запускается systemd-таймером (см. pocket-claude-backup.timer).
+# autmzr-command DB backup script.
+# Запускается systemd-таймером (см. autmzr-command-backup.timer).
 #
 # Конфиг через env:
-#   BACKUP_DIR        — куда складывать (default: /var/backups/pocket-claude)
+#   BACKUP_DIR        — куда складывать (default: /var/backups/autmzr-command)
 #   DATABASE_URL      — строка подключения (postgresql://...)
 #   RETENTION_DAILY   — сколько дневных хранить (default: 14)
 #   RETENTION_WEEKLY  — сколько недельных (default: 8)
@@ -11,15 +11,15 @@
 # Что делает:
 #   1. pg_dump в .sql.gz с timestamp
 #   2. Удаляет старые бэкапы по политике retention
-#   3. Логирует в /var/log/pocket-claude-backup.log
+#   3. Логирует в /var/log/autmzr-command-backup.log
 
 set -euo pipefail
 
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/pocket-claude}"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/autmzr-command}"
 DATABASE_URL="${DATABASE_URL:-}"
 RETENTION_DAILY="${RETENTION_DAILY:-14}"
 RETENTION_WEEKLY="${RETENTION_WEEKLY:-8}"
-LOG="${BACKUP_LOG:-/var/log/pocket-claude-backup.log}"
+LOG="${BACKUP_LOG:-/var/log/autmzr-command-backup.log}"
 
 mkdir -p "$BACKUP_DIR"
 mkdir -p "$BACKUP_DIR/daily"
@@ -41,7 +41,7 @@ fi
 
 DATE=$(date '+%Y%m%d-%H%M%S')
 DAY_OF_WEEK=$(date '+%u')   # 1=Monday ... 7=Sunday
-DAILY_FILE="$BACKUP_DIR/daily/pocket-claude-$DATE.sql.gz"
+DAILY_FILE="$BACKUP_DIR/daily/autmzr-command-$DATE.sql.gz"
 
 log "start backup → $DAILY_FILE"
 
@@ -59,16 +59,16 @@ fi
 
 # По воскресеньям — копия в weekly
 if [ "$DAY_OF_WEEK" = "7" ]; then
-  WEEKLY_FILE="$BACKUP_DIR/weekly/pocket-claude-$DATE.sql.gz"
+  WEEKLY_FILE="$BACKUP_DIR/weekly/autmzr-command-$DATE.sql.gz"
   cp "$DAILY_FILE" "$WEEKLY_FILE"
   log "weekly snapshot ok → $WEEKLY_FILE"
 fi
 
 # Retention: удалить старые
-find "$BACKUP_DIR/daily"  -name 'pocket-claude-*.sql.gz' -type f -mtime +${RETENTION_DAILY} -delete -print | while read f; do
+find "$BACKUP_DIR/daily"  -name 'autmzr-command-*.sql.gz' -type f -mtime +${RETENTION_DAILY} -delete -print | while read f; do
   log "purged daily: $(basename $f)"
 done
-find "$BACKUP_DIR/weekly" -name 'pocket-claude-*.sql.gz' -type f -mtime +$((RETENTION_WEEKLY * 7)) -delete -print | while read f; do
+find "$BACKUP_DIR/weekly" -name 'autmzr-command-*.sql.gz' -type f -mtime +$((RETENTION_WEEKLY * 7)) -delete -print | while read f; do
   log "purged weekly: $(basename $f)"
 done
 

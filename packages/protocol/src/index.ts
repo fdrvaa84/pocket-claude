@@ -1,5 +1,5 @@
 /**
- * Pocket-Claude protocol v1.
+ * Autmzr Command protocol v1.
  * Сообщения между master (Next.js) и agent (standalone Node).
  * Транспорт — WebSocket (WSS в prod, WS для localhost).
  */
@@ -41,7 +41,10 @@ export type MessageType =
 
 export interface HelloMessage extends Envelope {
   type: 'hello';
-  agent: 'pocket-claude-agent';
+  // Wire-level agent identifier. Принимаем оба варианта: старое имя
+  // ('pocket-claude-agent', осталось у уже задеплоенных хостов) и новое
+  // ('autmzr-command-agent', после ребрендинга).
+  agent: 'pocket-claude-agent' | 'autmzr-command-agent';
   version: string;
   os: string;
   arch: string;
@@ -108,7 +111,7 @@ export interface ClaudeRequest extends Envelope {
   strict_mcp_config?: boolean;      // --strict-mcp-config
   /**
    * MCP-серверы, которые agent должен добавить claude CLI через --mcp-config.
-   * Используется в proxy-режиме: pocket-claude подставляет rfs-mcp-сервер,
+   * Используется в proxy-режиме: autmzr-command подставляет rfs-mcp-сервер,
    * который роутит все fs/exec tool-вызовы обратно на fs-device.
    */
   mcp_servers?: Record<string, McpServerSpec>;
@@ -119,7 +122,7 @@ export interface ClaudeRequest extends Envelope {
 
 /** Один MCP-сервер в формате claude CLI (stdio-транспорт). */
 export interface McpServerSpec {
-  /** Команда для запуска. Agent может резолвить sentinel 'pocket-claude-rfs' в путь к bundled mcp-скрипту. */
+  /** Команда для запуска. Agent может резолвить sentinel 'autmzr-command-rfs' (или legacy 'pocket-claude-rfs') в путь к bundled mcp-скрипту. */
   command: string;
   args?: string[];
   env?: Record<string, string>;
@@ -361,7 +364,8 @@ export const FS_BLOCKLIST_PATTERNS = [
   /(^|\/)\.ssh(\/|$)/,                   // ~/.ssh/**
   /(^|\/)\.aws(\/|$)/,                   // ~/.aws/**
   /(^|\/)\.gnupg(\/|$)/,                 // ~/.gnupg/**
-  /(^|\/)\.pocket-claude(\/|$)/,         // собственный конфиг агента
+  /(^|\/)\.pocket-claude(\/|$)/,         // собственный конфиг агента (legacy)
+  /(^|\/)\.autmzr-command(\/|$)/,        // собственный конфиг агента
 ];
 
 export function isPathBlocked(absolutePath: string): boolean {

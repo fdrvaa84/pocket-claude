@@ -214,7 +214,7 @@ export default function ClaudeLoginModal({ deviceId, deviceName, onClose }: Prop
                 <li>Открой <a href="https://console.anthropic.com/settings/keys" target="_blank"
                   className="underline" style={{ color: 'var(--accent)' }}>
                   console.anthropic.com/settings/keys</a></li>
-                <li>Нажми <b>Create Key</b>, дай имя (типа «pocket-claude»)</li>
+                <li>Нажми <b>Create Key</b>, дай имя (типа «autmzr-command»)</li>
                 <li>Скопируй ключ (начинается с <code className="font-mono text-[10.5px]">sk-ant-…</code>)</li>
                 <li>Вставь ниже и жми «Сохранить». Ключ пойдёт в pay-per-use тариф, не подписку.</li>
               </ol>

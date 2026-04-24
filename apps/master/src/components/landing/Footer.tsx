@@ -40,7 +40,7 @@ export default function Footer() {
               <FooterLink href="/">Sign in</FooterLink>
               <FooterLink href="#pricing">Pricing</FooterLink>
               <FooterLink
-                href="https://github.com/pocket-claude/pocket-claude"
+                href="https://github.com/autmzr/autmzr-command"
                 external
               >
                 <span className="inline-flex items-center gap-1.5">
@@ -51,19 +51,19 @@ export default function Footer() {
             </FooterCol>
             <FooterCol title="Resources">
               <FooterLink
-                href="https://github.com/pocket-claude/pocket-claude#readme"
+                href="https://github.com/autmzr/autmzr-command#readme"
                 external
               >
                 Docs
               </FooterLink>
               <FooterLink
-                href="https://github.com/pocket-claude/pocket-claude/issues"
+                href="https://github.com/autmzr/autmzr-command/issues"
                 external
               >
                 Report a bug
               </FooterLink>
               <FooterLink
-                href="https://github.com/pocket-claude/pocket-claude/releases"
+                href="https://github.com/autmzr/autmzr-command/releases"
                 external
               >
                 Changelog

@@ -11,8 +11,9 @@ import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@autmzr/comm
  * POST /api/devices/[id]/claude-set-api-key  { apiKey: "sk-ant-..." }
  *
  * Через exec на agent создаём systemd-override:
- *   /etc/systemd/system/pocket-claude-agent.service.d/api-key.conf
+ *   /etc/systemd/system/<service>.service.d/api-key.conf
  * с Environment=ANTHROPIC_API_KEY=…, daemon-reload, restart.
+ * <service> = autmzr-command-agent (новое имя) или pocket-claude-agent (legacy).
  * После рестарта agent получает ключ в env и bash -lc 'claude' его видит.
  *
  * Plus: пишем в /root/.bashrc / /root/.profile (для интерактивных PTY-сессий).
@@ -53,19 +54,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const escapedKey = apiKey.replace(/'/g, `'\\''`);
 
       // Команда собирает: systemd override + ~/.bashrc + ~/.profile
-      // и проверяет что claude --version работает с этим ключом
+      // и проверяет что claude --version работает с этим ключом.
+      // Поддерживаем оба имени сервиса (новое + legacy) — мигрировать одной командой
+      // ВСЕХ существующих агентов мы не можем, поэтому пишем в тот, который реально стоит.
       const cmd = [
         `set -e`,
-        // 1. systemd override для agent'а
-        `if [ -f /etc/systemd/system/pocket-claude-agent.service ]; then`,
-        `  mkdir -p /etc/systemd/system/pocket-claude-agent.service.d/`,
-        `  cat > /etc/systemd/system/pocket-claude-agent.service.d/api-key.conf <<EOF`,
+        // 1. systemd override для agent'а — определяем имя сервиса (новое или legacy)
+        `SVC=""`,
+        `if [ -f /etc/systemd/system/autmzr-command-agent.service ]; then SVC=autmzr-command-agent; fi`,
+        `if [ -z "$SVC" ] && [ -f /etc/systemd/system/pocket-claude-agent.service ]; then SVC=pocket-claude-agent; fi`,
+        `if [ -n "$SVC" ]; then`,
+        `  mkdir -p /etc/systemd/system/$SVC.service.d/`,
+        `  cat > /etc/systemd/system/$SVC.service.d/api-key.conf <<EOF`,
         `[Service]`,
         `Environment=ANTHROPIC_API_KEY=${escapedKey}`,
         `EOF`,
-        `  chmod 600 /etc/systemd/system/pocket-claude-agent.service.d/api-key.conf`,
+        `  chmod 600 /etc/systemd/system/$SVC.service.d/api-key.conf`,
         `  systemctl daemon-reload`,
-        `  echo "[info] systemd override written"`,
+        `  echo "[info] systemd override written for $SVC"`,
         `fi`,
         // 2. В ~/.bashrc / ~/.profile для интерактивных shell (чтобы PTY тоже видел)
         `for f in ~/.bashrc ~/.profile; do`,
@@ -83,9 +89,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         `  echo "[warn] claude --version дал ошибку, но ключ записан"`,
         `fi`,
         // 4. Рестартим agent чтобы он подхватил новую env
-        `if systemctl is-active --quiet pocket-claude-agent 2>/dev/null; then`,
-        `  systemctl restart pocket-claude-agent`,
-        `  echo "[info] agent restarted with new API key"`,
+        `if [ -n "$SVC" ] && systemctl is-active --quiet "$SVC" 2>/dev/null; then`,
+        `  systemctl restart "$SVC"`,
+        `  echo "[info] $SVC restarted with new API key"`,
         `fi`,
       ].join('\n');
 

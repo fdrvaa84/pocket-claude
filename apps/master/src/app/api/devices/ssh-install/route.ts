@@ -7,7 +7,7 @@ import { Client } from 'ssh2';
 
 /**
  * POST /api/devices/ssh-install
- * Подключается к удалённому серверу по SSH и выполняет там pocket-claude installer.
+ * Подключается к удалённому серверу по SSH и выполняет там autmzr-command installer.
  *
  * Body: { host, port?, user, auth: { type: 'password'|'key', password?, key? }, connectCmd }
  * connectCmd — готовая команда `curl ... | bash ...` которую клиент получил ранее из POST /api/devices.

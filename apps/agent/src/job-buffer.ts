@@ -3,7 +3,9 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { ClaudeEvent, ClaudeDone, ClaudeError, ClaudeRequest } from '@autmzr/command-protocol';
 
-const JOBS_DIR = join(homedir(), '.pocket-claude', 'jobs');
+// Новое имя — после ребрендинга. Старая ~/.pocket-claude может остаться от
+// предыдущей установки; connect.sh при апгрейде копирует содержимое сюда.
+const JOBS_DIR = join(homedir(), '.autmzr-command', 'jobs');
 
 export interface JobMeta {
   id: string;

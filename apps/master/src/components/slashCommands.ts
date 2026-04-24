@@ -1,5 +1,5 @@
 /**
- * Slash-команды для pocket-claude.
+ * Slash-команды для autmzr-command.
  *
  * Два класса:
  *  - UI_COMMANDS — обрабатываются локально в браузере (не уходят в Claude).

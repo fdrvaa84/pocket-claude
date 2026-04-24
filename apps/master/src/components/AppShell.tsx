@@ -339,9 +339,9 @@ export default function AppShell({ user }: { user: User }) {
         {/* Brand */}
         <div className="flex items-center gap-2.5 px-3 pt-3.5 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="w-7 h-7 rounded-md flex items-center justify-center font-mono font-bold text-[14px] shrink-0"
-            style={{ background: 'var(--accent)', color: 'var(--bg)' }}>P</div>
+            style={{ background: 'var(--accent)', color: 'var(--bg)' }}>A</div>
           <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-semibold leading-tight">pocket-claude</div>
+            <div className="text-[13px] font-semibold leading-tight">autmzr-command</div>
             <div className="font-mono text-[10.5px] mt-0.5" style={{ color: 'var(--muted)' }}>
               v0.1.0 · {onlineCount}/{devices.length} online
             </div>
@@ -543,7 +543,7 @@ export default function AppShell({ user }: { user: User }) {
             </button>
             <div className="font-mono text-[13px] flex items-baseline gap-1.5 min-w-0">
               <span style={{ color: 'var(--muted)' }}>~</span>
-              <span className="truncate" style={{ fontWeight: 500 }}>{activeProject?.name || 'pocket-claude'}</span>
+              <span className="truncate" style={{ fontWeight: 500 }}>{activeProject?.name || 'autmzr-command'}</span>
               {activeDevice && (
                 <span className="text-[11.5px] flex items-center gap-1 shrink-0" style={{ color: 'var(--muted)' }}>
                   <span>@</span>

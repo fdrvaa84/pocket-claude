@@ -71,7 +71,7 @@ export default function Pricing() {
             </ul>
 
             <a
-              href="https://github.com/pocket-claude/pocket-claude"
+              href="https://github.com/autmzr/autmzr-command"
               target="_blank"
               rel="noreferrer"
               className="mt-7 inline-flex items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-[13.5px] font-semibold transition-colors"

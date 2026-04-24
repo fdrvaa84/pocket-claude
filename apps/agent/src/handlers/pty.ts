@@ -106,7 +106,9 @@ export function handlePtyOpen(
         ...(req.env || {}),
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
-        // Подпись, чтобы можно было увидеть что это из pocket-claude если надо
+        // Подпись, чтобы можно было увидеть что это из autmzr-command если надо.
+        // Сохраняем старое POCKET_CLAUDE для скриптов, которые на него полагаются.
+        AUTMZR_COMMAND: '1',
         POCKET_CLAUDE: '1',
       },
     });

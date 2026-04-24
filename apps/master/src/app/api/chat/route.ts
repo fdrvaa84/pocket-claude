@@ -123,13 +123,19 @@ export async function POST(req: NextRequest) {
   if (isProxy) {
     const rfsToken = await issueRfsToken(user.id, project!.id, fsDeviceId);
     const masterUrl = process.env.PUBLIC_URL || 'http://localhost:3100';
-    // Для claude-устройства мы даём sentinel 'pocket-claude-rfs' — agent сам
-    // резолвит его в путь к локальному bundled скрипту rfs-mcp.
+    // Для claude-устройства мы даём sentinel 'autmzr-command-rfs' — agent сам
+    // резолвит его в путь к локальному bundled скрипту rfs-mcp. (Старый
+    // sentinel 'pocket-claude-rfs' тоже принимается агентами, для совместимости.)
     mcp_servers = {
       rfs: {
-        command: 'pocket-claude-rfs',
+        command: 'autmzr-command-rfs',
         args: [],
         env: {
+          // Новые имена. POCKET_CLAUDE_* шлём дублем — старый rfs-mcp
+          // (если он уже задеплоен на claude-устройстве) умеет читать только их.
+          AUTMZR_COMMAND_MASTER_URL: masterUrl,
+          AUTMZR_COMMAND_RFS_TOKEN: rfsToken,
+          AUTMZR_COMMAND_RFS_LABEL: `${project!.name}@${project!.device_name || 'fs'}`,
           POCKET_CLAUDE_MASTER_URL: masterUrl,
           POCKET_CLAUDE_RFS_TOKEN: rfsToken,
           POCKET_CLAUDE_RFS_LABEL: `${project!.name}@${project!.device_name || 'fs'}`,

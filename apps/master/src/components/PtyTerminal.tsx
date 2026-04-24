@@ -276,7 +276,7 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
                 '\r\n\x1b[31m✗ node-pty не установлен на устройстве\x1b[0m\r\n' +
                 '\x1b[90mНа сервере выполни:\x1b[0m\r\n' +
                 '  \x1b[33msudo npm install -g node-pty\x1b[0m\r\n' +
-                '\x1b[90mпотом перезапусти агент: systemctl restart pocket-claude-agent\x1b[0m\r\n',
+                '\x1b[90mпотом перезапусти агент: systemctl restart autmzr-command-agent\x1b[0m\r\n',
               );
             } else {
               term!.write(`\r\n\x1b[31m✗ ${m.message}\x1b[0m\r\n`);
