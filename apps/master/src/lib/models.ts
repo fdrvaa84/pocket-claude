@@ -30,7 +30,20 @@ export interface ModelSpec {
   hint: string;
   /** Категория «дешевизны» для быстрой оценки — cheap/balanced/premium */
   tier: 'cheap' | 'balanced' | 'premium';
+  /** Если true — рисуем «BETA» бейдж рядом с label. Используется для
+   *  провайдеров с региональными ограничениями (Gemini блочит RU/CN/etc).  */
+  experimental?: boolean;
 }
+
+/** Заметка-предупреждение на уровне провайдера. Показывается в DeviceSheet
+ *  и в pill при выборе модели. NULL = провайдер стабилен. */
+export const PROVIDER_NOTICE: Record<Provider, string | null> = {
+  'claude-code': null,
+  'gemini-cli':
+    'Gemini API ограничен Google по странам (Россия, Китай, Иран и др. — блокируются). ' +
+    'Если получаешь «User location is not supported» — нужен VPN на сервере или ' +
+    'отдельный агент в неблокированной локации.',
+};
 
 export const MODELS: Record<Provider, ModelSpec[]> = {
   'claude-code': [
@@ -67,6 +80,7 @@ export const MODELS: Record<Provider, ModelSpec[]> = {
       tags: ['быстрая', 'бюджет'],
       hint: 'Быстрая и дешёвая — для простых задач и bulk-обработки',
       tier: 'cheap',
+      experimental: true,
     },
     {
       id: 'gemini-2.5-pro',
@@ -75,6 +89,7 @@ export const MODELS: Record<Provider, ModelSpec[]> = {
       tags: ['умная'],
       hint: 'Серьёзные задачи, большой контекст',
       tier: 'premium',
+      experimental: true,
     },
   ],
 };

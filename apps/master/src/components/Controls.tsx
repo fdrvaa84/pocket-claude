@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { MODELS as MODEL_CATALOG, DEFAULT_MODEL, type Provider, isValidModel } from '@/lib/models';
+import { MODELS as MODEL_CATALOG, DEFAULT_MODEL, PROVIDER_NOTICE, type Provider, isValidModel } from '@/lib/models';
 
 // ---------------- Data ----------------
 //
@@ -194,6 +194,12 @@ export function ModelEffortPill({
             </div>
             <div className="flex gap-1"><Kbd>⇧</Kbd><Kbd>⌘</Kbd><Kbd>I</Kbd></div>
           </div>
+          {PROVIDER_NOTICE[provider] && (
+            <div className="mx-1.5 mb-1 px-2 py-1.5 rounded text-[10.5px]"
+              style={{ background: 'var(--accent-light)', color: 'var(--muted)', lineHeight: 1.4 }}>
+              🌍 {PROVIDER_NOTICE[provider]}
+            </div>
+          )}
           {modelsForProvider.map((m, i) => (
             <button key={m.id}
               onClick={() => onChange(m.id, effort)}
@@ -201,7 +207,15 @@ export function ModelEffortPill({
               style={{ background: normalized === m.id ? 'var(--accent-light)' : 'transparent' }}>
               <span style={{ fontSize: 14, lineHeight: 1.2 }}>{m.icon}</span>
               <span className="flex-1 min-w-0">
-                <span className="block text-[13px] font-medium">{m.label}</span>
+                <span className="block text-[13px] font-medium">
+                  {m.label}
+                  {m.experimental && (
+                    <span className="ml-1.5 font-mono text-[9px] px-1 py-px rounded align-middle"
+                      style={{ background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)', letterSpacing: '0.05em' }}>
+                      BETA
+                    </span>
+                  )}
+                </span>
                 <span className="block text-[10.5px]" style={{ color: 'var(--muted)' }}>{m.hint}</span>
               </span>
               {normalized === m.id && <span>✓</span>}

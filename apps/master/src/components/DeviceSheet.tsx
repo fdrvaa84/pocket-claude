@@ -197,6 +197,19 @@ export default function DeviceSheet({
                 </button>
               </div>
 
+              {/* Notice о региональных ограничениях Gemini — только если CLI установлен */}
+              {geminiInstalled && (
+                <div className="mt-2 px-3 py-2 rounded-lg text-[11.5px] flex items-start gap-2"
+                  style={{ background: 'var(--accent-light)', color: 'var(--fg-2)', border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: 13 }}>🌍</span>
+                  <span>
+                    <b>Gemini API заблокирован Google для ряда стран</b> (Россия, Китай, Иран и др.).
+                    Если получаешь ошибку «User location is not supported» — нужен VPN на сервере или
+                    отдельный агент в неблокированной локации.
+                  </span>
+                </div>
+              )}
+
               {/* Default-agent селектор */}
               {(claudeLoggedIn || geminiLoggedIn) && (
                 <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: '1px dashed var(--border)' }}>

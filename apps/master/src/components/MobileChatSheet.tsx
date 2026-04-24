@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from 'react';
 import { MODES, EFFORTS, MODEL_CATALOG, normalizeModel, type ModelValue, type EffortValue, type ModeValue, type Provider } from './Controls';
+import { PROVIDER_NOTICE } from '@/lib/models';
 import { COMMANDS } from './slashCommands';
 
 interface Props {
@@ -112,6 +113,12 @@ export default function MobileChatSheet({
             style={{ color: 'var(--muted)' }}>
             Модель · {provider === 'gemini-cli' ? 'Gemini' : 'Claude'}
           </div>
+          {PROVIDER_NOTICE[provider] && (
+            <div className="mb-2 px-3 py-2 rounded-[10px] text-[12px]"
+              style={{ background: 'var(--accent-light)', color: 'var(--muted)', lineHeight: 1.4 }}>
+              🌍 {PROVIDER_NOTICE[provider]}
+            </div>
+          )}
           <div className="rounded-[14px] overflow-hidden"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             {MODELS_FOR_PROVIDER.map((m, i) => {
@@ -123,7 +130,15 @@ export default function MobileChatSheet({
                   style={{ borderBottom: i < MODELS_FOR_PROVIDER.length - 1 ? '1px solid var(--border)' : '0' }}>
                   <span className="w-6 text-center text-[16px] opacity-85">{m.icon}</span>
                   <span className="flex-1 min-w-0">
-                    <span className="block">{m.label}</span>
+                    <span className="block">
+                      {m.label}
+                      {m.experimental && (
+                        <span className="ml-2 font-mono text-[10px] px-1.5 py-px rounded align-middle"
+                          style={{ background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)', letterSpacing: '0.05em' }}>
+                          BETA
+                        </span>
+                      )}
+                    </span>
                     <span className="block text-[12px] mt-0.5" style={{ color: 'var(--muted)' }}>{m.hint}</span>
                   </span>
                   {on && <span className="font-semibold mt-0.5" style={{ color: 'var(--accent)' }}>✓</span>}
