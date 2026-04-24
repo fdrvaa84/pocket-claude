@@ -59,6 +59,16 @@ export async function processClaudeMessage(jobId: string, msg: AnyMessage): Prom
       await query(`UPDATE pc.chat_jobs SET claude_session_id = $1, last_event_at = NOW() WHERE id = $2`,
         [ev.session_id, jobId]);
     }
+    if (ev?.type === 'stderr' && typeof ev.text === 'string') {
+      // Сохраняем stderr в tool_events — для диагностики когда CLI валится
+      // без stdout (типичный кейс у Gemini: неизвестный --model → немедленный exit).
+      await query(
+        `UPDATE pc.chat_jobs
+         SET tool_events = tool_events || $1::jsonb, last_event_at = NOW()
+         WHERE id = $2`,
+        [JSON.stringify([{ tool: '__stderr__', input: ev.text }]), jobId],
+      );
+    }
     if (ev?.type === 'result' && typeof ev.result === 'string') {
       // resultFinal — перезаписываем accumulated_text если отличается (у нас в stream может быть короче)
       await query(

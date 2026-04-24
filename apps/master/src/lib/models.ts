@@ -61,20 +61,12 @@ export const MODELS: Record<Provider, ModelSpec[]> = {
   ],
   'gemini-cli': [
     {
-      id: 'gemini-2.5-flash-lite',
-      label: 'Flash Lite',
-      icon: '⚡',
-      tags: ['быстрая', 'бюджет'],
-      hint: 'Простейшие задачи, bulk-обработка',
-      tier: 'cheap',
-    },
-    {
       id: 'gemini-2.5-flash',
       label: 'Flash',
       icon: '💨',
-      tags: ['быстрая'],
-      hint: 'Рабочая лошадка — быстрая и недорогая',
-      tier: 'balanced',
+      tags: ['быстрая', 'бюджет'],
+      hint: 'Быстрая и дешёвая — для простых задач и bulk-обработки',
+      tier: 'cheap',
     },
     {
       id: 'gemini-2.5-pro',

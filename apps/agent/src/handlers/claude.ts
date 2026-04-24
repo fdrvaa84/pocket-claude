@@ -167,6 +167,10 @@ export function handleClaude(
   let buf = '';
   let lastSessionId: string | undefined;
   let lastResult: string | undefined;
+  // Буфер stderr (последние 4 KB) — если CLI упадёт с non-zero, покажем
+  // пользователю реальное сообщение, а не только exit-code.
+  let stderrTail = '';
+  const STDERR_MAX = 4096;
 
   proc.stdout.on('data', (chunk: Buffer) => {
     buf += chunk.toString('utf8');
@@ -192,14 +196,23 @@ export function handleClaude(
   });
 
   proc.stderr.on('data', (chunk: Buffer) => {
-    // stderr от claude — в error event чтобы UI показал
-    send({ type: 'claude.event', correlation_id: req.id, event: { type: 'stderr', text: chunk.toString('utf8') } });
+    const text = chunk.toString('utf8');
+    // Копим хвост для включения в финальный error message
+    stderrTail = (stderrTail + text).slice(-STDERR_MAX);
+    // Плюс стримим live-событием чтобы UI мог показать прогресс
+    send({ type: 'claude.event', correlation_id: req.id, event: { type: 'stderr', text } });
   });
 
   proc.on('close', (code) => {
     clearTimeout(killer);
     if (code !== 0 && !lastResult) {
-      send({ type: 'claude.error', correlation_id: req.id, message: `${provider} exited with code ${code}` });
+      // Показываем юзеру и код, и хвост stderr — иначе «exit 144» непригоден
+      // для диагностики (особенно для Gemini, который валится без stdout).
+      const tail = stderrTail.trim();
+      const message = tail
+        ? `${provider} exited with code ${code}:\n${tail}`
+        : `${provider} exited with code ${code}`;
+      send({ type: 'claude.error', correlation_id: req.id, message });
       return;
     }
     send({ type: 'claude.done', correlation_id: req.id, session_id: lastSessionId, result: lastResult });
