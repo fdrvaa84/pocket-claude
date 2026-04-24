@@ -1,0 +1,17 @@
+[Unit]
+Description=autmzr-command DB backup (pg_dump)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/autmzr-command/.env
+Environment=BACKUP_DIR=/var/backups/autmzr-command
+Environment=RETENTION_DAILY=14
+Environment=RETENTION_WEEKLY=8
+Environment=BACKUP_LOG=/var/log/autmzr-command-backup.log
+ExecStart=/opt/autmzr-command/apps/master/scripts/backup.sh
+StandardOutput=append:/var/log/autmzr-command-backup.log
+StandardError=append:/var/log/autmzr-command-backup.log
+Nice=15
+IOSchedulingClass=idle

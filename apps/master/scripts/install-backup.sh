@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Установка systemd-таймера для pocket-claude бэкапов.
+# Установка systemd-таймера для autmzr-command бэкапов.
 # Запускать на проде: bash apps/master/scripts/install-backup.sh
 set -euo pipefail
 
-REPO=/opt/pocket-claude
+REPO=/opt/autmzr-command
 SCRIPTS=$REPO/apps/master/scripts
 
 if [ "$EUID" -ne 0 ]; then
@@ -21,15 +21,22 @@ fi
 
 chmod +x "$SCRIPTS/backup.sh"
 
-cp "$SCRIPTS/pocket-claude-backup.service" /etc/systemd/system/
-cp "$SCRIPTS/pocket-claude-backup.timer"   /etc/systemd/system/
+# Миграция со старых имён (pocket-claude-backup → autmzr-command-backup), если есть.
+if [ -f /etc/systemd/system/pocket-claude-backup.timer ]; then
+  systemctl disable --now pocket-claude-backup.timer 2>/dev/null || true
+  rm -f /etc/systemd/system/pocket-claude-backup.timer
+  rm -f /etc/systemd/system/pocket-claude-backup.service
+fi
 
-mkdir -p /var/backups/pocket-claude
-touch /var/log/pocket-claude-backup.log
+cp "$SCRIPTS/autmzr-command-backup.service" /etc/systemd/system/
+cp "$SCRIPTS/autmzr-command-backup.timer"   /etc/systemd/system/
+
+mkdir -p /var/backups/autmzr-command
+touch /var/log/autmzr-command-backup.log
 
 systemctl daemon-reload
-systemctl enable --now pocket-claude-backup.timer
+systemctl enable --now autmzr-command-backup.timer
 
 echo "✓ установлено"
-echo "Проверь статус: systemctl status pocket-claude-backup.timer"
-echo "Запустить вручную: systemctl start pocket-claude-backup.service && tail -50 /var/log/pocket-claude-backup.log"
+echo "Проверь статус: systemctl status autmzr-command-backup.timer"
+echo "Запустить вручную: systemctl start autmzr-command-backup.service && tail -50 /var/log/autmzr-command-backup.log"

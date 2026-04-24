@@ -1,17 +1,18 @@
 /**
- * pocket-claude Remote FileSystem MCP server.
+ * autmzr-command Remote FileSystem MCP server (legacy name: pocket-claude rfs-mcp).
  *
  * Ethical-first design:
  *  - This process is spawned by claude CLI as a stdio MCP server on the "claude-device".
- *  - All tool calls are proxied to pocket-claude master over HTTPS.
+ *  - All tool calls are proxied to autmzr-command master over HTTPS.
  *  - Master then round-trips to the "fs-device" agent via its persistent WebSocket.
  *  - Actual files & shell commands live and run on fs-device. claude-device only hosts the CLI.
  *  - We never touch Anthropic traffic — claude CLI talks to Anthropic directly.
  *
- * Config (env vars, all set by claude-device agent):
- *   POCKET_CLAUDE_MASTER_URL   https://master.example.com
- *   POCKET_CLAUDE_RFS_TOKEN    one-time bearer, scoped to (user, project, fs-device)
- *   POCKET_CLAUDE_RFS_LABEL    optional human-readable label (logged in master UI)
+ * Config (env vars, all set by claude-device agent). Старые имена POCKET_CLAUDE_*
+ * принимаются для совместимости со старыми агентами:
+ *   AUTMZR_COMMAND_MASTER_URL  (legacy: POCKET_CLAUDE_MASTER_URL)  https://master.example.com
+ *   AUTMZR_COMMAND_RFS_TOKEN   (legacy: POCKET_CLAUDE_RFS_TOKEN)   one-time bearer, scoped to (user, project, fs-device)
+ *   AUTMZR_COMMAND_RFS_LABEL   (legacy: POCKET_CLAUDE_RFS_LABEL)   optional human-readable label (logged in master UI)
  */
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
@@ -29,9 +30,9 @@ interface ToolSpec {
   inputSchema: JsonValue;
 }
 
-const MASTER = process.env.POCKET_CLAUDE_MASTER_URL || '';
-const TOKEN = process.env.POCKET_CLAUDE_RFS_TOKEN || '';
-const LABEL = process.env.POCKET_CLAUDE_RFS_LABEL || 'rfs';
+const MASTER = process.env.AUTMZR_COMMAND_MASTER_URL || process.env.POCKET_CLAUDE_MASTER_URL || '';
+const TOKEN = process.env.AUTMZR_COMMAND_RFS_TOKEN || process.env.POCKET_CLAUDE_RFS_TOKEN || '';
+const LABEL = process.env.AUTMZR_COMMAND_RFS_LABEL || process.env.POCKET_CLAUDE_RFS_LABEL || 'rfs';
 
 function stderr(msg: string) {
   // stdout is reserved for JSON-RPC; everything else → stderr.
@@ -39,7 +40,7 @@ function stderr(msg: string) {
 }
 
 if (!MASTER || !TOKEN) {
-  stderr('FATAL: POCKET_CLAUDE_MASTER_URL and POCKET_CLAUDE_RFS_TOKEN are required');
+  stderr('FATAL: AUTMZR_COMMAND_MASTER_URL and AUTMZR_COMMAND_RFS_TOKEN are required');
   process.exit(1);
 }
 
@@ -217,7 +218,7 @@ async function handle(req: RpcRequest) {
     if (method === 'initialize') {
       send(id, {
         protocolVersion: '2024-11-05',
-        serverInfo: { name: 'pocket-claude-rfs', version: '0.1.0' },
+        serverInfo: { name: 'autmzr-command-rfs', version: '0.1.0' },
         capabilities: { tools: {} },
       });
       return;

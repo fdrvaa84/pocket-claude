@@ -1,16 +1,18 @@
-# Pocket Claude
+# Autmzr Command
 
-> Your Claude Code CLI. In your pocket.
+> Your AI command center. In your pocket.
 
-Open-source мост между твоим телефоном и `claude` CLI на твоих серверах и компах. Один веб-интерфейс, много устройств, одна подписка Anthropic на каждом устройстве.
+Open-source мост между твоим телефоном и AI coding-CLI (`claude`, и в перспективе `aider`/`codex`/`gemini-cli`) на твоих серверах и компах. Один веб-интерфейс, много устройств, одна подписка на каждом устройстве.
 
 **Не** SaaS. **Не** форк Claude. **Не** хранит OAuth-токены Anthropic. Просто роутер сообщений между браузером и локальным `claude` процессом.
+
+Часть [Autmzr](https://autmzr.ru) — наш зонтик для self-hosted dev-инструментов.
 
 ![screenshot placeholder](docs/screenshot.png)
 
 ## Ethical stance
 
-**Pocket-Claude не предоставляет доступ к Claude.** Это оркестратор поверх официального Claude Code CLI, который ты запускаешь на своих устройствах со своей личной подпиской Anthropic. Если у тебя нет валидной подписки Claude Pro/Max или API-ключа — ничего работать не будет, и это правильно.
+**Autmzr Command не предоставляет доступ к Claude.** Это оркестратор поверх официального Claude Code CLI, который ты запускаешь на своих устройствах со своей личной подпиской Anthropic. Если у тебя нет валидной подписки Claude Pro/Max или API-ключа — ничего работать не будет, и это правильно.
 
 Мы стоим на стороне Anthropic: наша задача — дать удобный инструмент для тех, у кого есть подписка, но нет своего способа работать с Claude с телефона или с нескольких машин. Мы не обходим ограничения, не делим подписки между юзерами, не трогаем Anthropic-API и не пытаемся быть «Claude без регистрации».
 
@@ -28,7 +30,7 @@ Open-source мост между твоим телефоном и `claude` CLI н
 
 ## Что это делает
 
-- Открываешь `https://pocket.mydomain.com` на телефоне
+- Открываешь `https://command.mydomain.com` на телефоне
 - Видишь список всех своих проектов на всех устройствах (серверы, домашний комп)
 - Подключаешь любое количество устройств — локальных и удалённых. Claude запускаешь на одном, работаешь с проектами на любом из остальных
 - Открываешь проект → пишешь задачу → Claude CLI стримит ответ с подсветкой кода и tool_use-событиями
@@ -40,15 +42,15 @@ Open-source мост между твоим телефоном и `claude` CLI н
 
 ```bash
 # 1. Клонируй
-git clone https://github.com/pocket-claude/pocket-claude.git
-cd pocket-claude
+git clone https://github.com/autmzr/autmzr-command.git
+cd autmzr-command
 
 # 2. Setup wizard задаст 5 вопросов
 pnpm setup
 
 # 3. Запусти
 docker compose up -d
-pnpm --filter @pocket-claude/master migrate
+pnpm --filter @autmzr/command-master migrate
 pnpm dev   # или `pnpm start` для production
 ```
 
@@ -59,17 +61,19 @@ pnpm dev   # или `pnpm start` для production
 В UI: **Settings → + Device → скопируй команду**. Выполни её на любом сервере / компе:
 
 ```bash
-curl -sSL https://pocket.mydomain.com/connect.sh | \
-  bash -s -- --master wss://pocket.mydomain.com/ws/agent --token XXX --name home-mac
+curl -sSL https://command.mydomain.com/connect.sh | \
+  bash -s -- --master wss://command.mydomain.com/ws/agent --token XXX --name home-mac
 ```
 
 Скрипт:
 - Скачает `agent.js` (≈ 2 МБ)
-- Положит конфиг в `~/.pocket-claude/`
+- Положит конфиг в `~/.autmzr-command/`
 - Поднимет systemd user unit (Linux) или launchd plist (macOS)
 - Agent подключится к мастеру, устройство станет 🟢 online в UI
 
-**Важно:** на устройстве должны быть установлены `node >= 20` и `claude` CLI с выполненным `claude login`. Pocket-Claude не хранит, не шлёт и не пытается использовать твой OAuth-токен Anthropic — он остаётся в `~/.claude/` на устройстве.
+**Важно:** на устройстве должны быть установлены `node >= 20` и `claude` CLI с выполненным `claude login`. Autmzr Command не хранит, не шлёт и не пытается использовать твой OAuth-токен Anthropic — он остаётся в `~/.claude/` на устройстве.
+
+> **Апгрейд со старой Pocket Claude установки:** новый `connect.sh` сам остановит старый сервис `pocket-claude-agent`, перенесёт конфиг из `~/.pocket-claude` в `~/.autmzr-command` и поставит `autmzr-command-agent`. Запусти команду из UI — миграция произойдёт автоматически.
 
 ## Architecture
 
@@ -89,16 +93,16 @@ Browser  ──HTTPS──>  Master (Next.js + Postgres)  ──WSS──>  Agen
 
 ## Compliance (Anthropic TOS)
 
-Pocket-Claude **соблюдает** условия использования Anthropic:
+Autmzr Command **соблюдает** условия использования Anthropic:
 
-| Правило | Pocket-Claude |
+| Правило | Autmzr Command |
 |---|---|
 | OAuth-токен Claude остаётся на машине юзера | ✅ agent не читает `~/.claude/*`, протокол не содержит такой операции |
 | Запросы идут через official `claude` CLI | ✅ `spawn('claude', ...)` в agent |
 | Телеметрия Anthropic не обходится | ✅ ничего не перехватывается |
 | Один юзер — одна подписка | ✅ устройство привязано к одному user_id в БД, sharing невозможен |
 
-В отличие от OpenClaw, Pocket-Claude **не извлекает** токены и **не проксирует** HTTP-запросы к Anthropic — запросы уходят напрямую с устройства юзера через его локальный CLI.
+В отличие от OpenClaw, Autmzr Command **не извлекает** токены и **не проксирует** HTTP-запросы к Anthropic — запросы уходят напрямую с устройства юзера через его локальный CLI.
 
 ## License
 
@@ -122,6 +126,7 @@ MIT. См. [LICENSE](LICENSE).
 - [ ] Auto-обновление агента из GitHub Releases
 - [ ] Voice input (Groq Whisper) / optional TTS
 - [ ] Plan mode в чате
+- [ ] Поддержка alt-агентов: aider, codex-cli, gemini-cli (поле `agent_kind`)
 
 ### v0.3 — multi-user
 - [ ] Google/GitHub OAuth для логина

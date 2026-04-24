@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Pocket-Claude setup wizard.
+ * Autmzr Command setup wizard.
  * Запускается из корня репо: `pnpm setup` или `npm run setup`.
  *
  * Что делает:
@@ -41,7 +41,7 @@ async function main() {
   } else {
     const domain = (await ask('Публичный URL (http://localhost:3100 для dev):', 'http://localhost:3100')).trim() || 'http://localhost:3100';
     const port = (await ask('Порт мастера:', '3100')).trim() || '3100';
-    const pgUrl = (await ask('DATABASE_URL:', 'postgresql://pc:pcpwd@localhost:5432/pocket_claude')).trim() || 'postgresql://pc:pcpwd@localhost:5432/pocket_claude';
+    const pgUrl = (await ask('DATABASE_URL:', 'postgresql://pc:pcpwd@localhost:5432/autmzr_command')).trim() || 'postgresql://pc:pcpwd@localhost:5432/autmzr_command';
     const adminEmail = (await ask('Email админа:')).trim();
     const adminPwd = (await ask('Пароль админа (6+ символов):')).trim();
     if (adminPwd.length < 6) die('Пароль слишком короткий');

@@ -38,7 +38,7 @@ export function connect(cfg: AgentConfig): void {
     const claude = await probeClaude();
     const hello: HelloMessage = {
       type: 'hello',
-      agent: 'pocket-claude-agent',
+      agent: 'autmzr-command-agent',
       version: AGENT_VERSION,
       os: platform(),
       arch: arch(),

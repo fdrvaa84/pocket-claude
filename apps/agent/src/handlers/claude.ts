@@ -8,11 +8,11 @@ import { safePath, SafetyError } from '../safety.js';
 import { jobStart, jobAppend, jobFinish } from '../job-buffer.js';
 
 /**
- * Резолвим sentinel "pocket-claude-rfs" в реальный путь к bundled rfs-mcp-скрипту.
+ * Резолвим sentinel "pocket-claude-rfs" / "autmzr-command-rfs" в реальный путь к bundled rfs-mcp-скрипту.
  * Порядок поиска:
  *  1. $PC_RFS_MCP_PATH
  *  2. рядом с текущим agent.js (одна папка, для bundled варианта)
- *  3. ~/.pocket-claude/rfs-mcp.js (если connect.sh его положил)
+ *  3. ~/.autmzr-command/rfs-mcp.js или legacy ~/.pocket-claude/rfs-mcp.js (если connect.sh его положил)
  *  4. node_modules/@autmzr/command-rfs-mcp/dist/index.js (для dev)
  */
 function resolveRfsMcpPath(): string | null {
@@ -23,6 +23,7 @@ function resolveRfsMcpPath(): string | null {
     const here = dirname(fileURLToPath(import.meta.url));
     const candidates = [
       join(here, 'rfs-mcp.js'),
+      join(homedir(), '.autmzr-command', 'rfs-mcp.js'),
       join(homedir(), '.pocket-claude', 'rfs-mcp.js'),
       join(here, '..', '..', 'rfs-mcp', 'dist', 'index.js'),
       join(here, '..', '..', '..', 'packages', 'rfs-mcp', 'dist', 'index.js'),
@@ -37,8 +38,10 @@ function buildMcpConfig(mcp: Record<string, McpServerSpec>): string | null {
   for (const [name, spec] of Object.entries(mcp)) {
     let command = spec.command;
     let args = spec.args || [];
-    // Sentinel → resolve to our bundled rfs-mcp script
-    if (command === 'pocket-claude-rfs') {
+    // Sentinel → resolve to our bundled rfs-mcp script.
+    // Принимаем и старое имя (pocket-claude-rfs) для совместимости с уже
+    // задеплоенными агентами, которые получают конфиг от обновлённого мастера.
+    if (command === 'autmzr-command-rfs' || command === 'pocket-claude-rfs') {
       const p = resolveRfsMcpPath();
       if (!p) return null;
       command = process.execPath; // node
@@ -68,7 +71,7 @@ export function handleClaude(
     return;
   }
 
-  // Start persistent buffer — files в ~/.pocket-claude/jobs/<id>.jsonl
+  // Start persistent buffer — files в ~/.autmzr-command/jobs/<id>.jsonl
   jobStart(req);
   // Обёртка send — одновременно пишем в файл и шлём по ws
   const origSend = send;
@@ -99,7 +102,7 @@ export function handleClaude(
     if (!cfg) {
       const errm: ClaudeError = {
         type: 'claude.error', correlation_id: req.id,
-        message: 'pocket-claude-rfs bundle not found on this device; run connect.sh again to install it',
+        message: 'autmzr-command-rfs bundle not found on this device; run connect.sh again to install it',
       };
       send(errm); return;
     }
@@ -113,7 +116,7 @@ export function handleClaude(
   const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
   if (pmode === 'bypassPermissions' && isRoot) {
     pmode = 'acceptEdits';
-    send({ type: 'claude.event', correlation_id: req.id, event: { type: 'stderr', text: '[pocket-claude] downgraded permission-mode to acceptEdits (running as root, bypass is disallowed by claude CLI)\n' } });
+    send({ type: 'claude.event', correlation_id: req.id, event: { type: 'stderr', text: '[autmzr-command] downgraded permission-mode to acceptEdits (running as root, bypass is disallowed by claude CLI)\n' } });
   }
   args.push('--permission-mode', pmode);
 

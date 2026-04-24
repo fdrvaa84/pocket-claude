@@ -30,7 +30,7 @@ export default function Hero() {
         </div>
         <div className="flex items-center gap-2">
           <a
-            href="https://github.com/pocket-claude/pocket-claude"
+            href="https://github.com/autmzr/autmzr-command"
             target="_blank"
             rel="noreferrer"
             className="btn btn-ghost text-[12.5px]"
@@ -93,7 +93,7 @@ export default function Hero() {
               <ArrowRight size={16} />
             </a>
             <a
-              href="https://github.com/pocket-claude/pocket-claude"
+              href="https://github.com/autmzr/autmzr-command"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center justify-center gap-2 rounded-full border px-6 py-3 text-[14px] font-semibold transition-colors"
@@ -183,7 +183,7 @@ function FakeChatUI() {
           />
           <span className="text-[12px] font-medium">home-mac</span>
           <span className="text-[11px]" style={{ color: 'var(--muted)' }}>
-            · pocket-claude
+            · autmzr-command
           </span>
         </div>
         <span className="font-mono text-[10px]" style={{ color: 'var(--muted)' }}>
