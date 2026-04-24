@@ -3,11 +3,12 @@
 /**
  * MobileTabBar — iOS-style bottom-tab-bar навигации для мобильного layout.
  *
- * Один источник истины для крупных разделов приложения на мобиле:
+ * Три крупных раздела приложения на мобиле:
  *   • Home     — текущий чат / welcome
  *   • Chats    — список всех чатов (sessions)
  *   • Devices  — список устройств (DevicesList)
- *   • Settings — глобальные настройки (Settings embedded)
+ *
+ * Settings убран — доступны через профиль-аватар в top-bar (Settings + Logout).
  *
  * Только мобильный layout (`md:hidden`). На desktop этим разделам соответствуют
  * sidebars — нижний бар не нужен.
@@ -15,9 +16,12 @@
  * Высота 54px + safe-area для iOS home-indicator.
  */
 
-import { Home, MessagesSquare, MonitorSmartphone, Settings } from 'lucide-react';
+import { Home, MessagesSquare, MonitorSmartphone } from 'lucide-react';
 
 export type MobileTab = 'home' | 'chats' | 'devices' | 'settings';
+// 'settings' оставляем в типе для обратной совместимости (старый сохранённый state),
+// но в bottom-bar его больше не рисуем — при попадании сюда AppShell рендерит
+// Settings inline. Новые заходы всегда выдают 'home' default.
 
 interface MobileTabBarProps {
   active: MobileTab;
@@ -30,7 +34,6 @@ const TABS: Array<{ id: MobileTab; label: string; icon: typeof Home }> = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'chats', label: 'Chats', icon: MessagesSquare },
   { id: 'devices', label: 'Devices', icon: MonitorSmartphone },
-  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 export default function MobileTabBar({ active, onChange, badges }: MobileTabBarProps) {

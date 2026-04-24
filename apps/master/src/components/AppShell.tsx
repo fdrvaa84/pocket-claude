@@ -530,6 +530,9 @@ export default function AppShell({ user }: { user: User }) {
   );
 
   // На мобиле, если выбран не-home таб — рендерим только этот pane (без сайдбара/композера).
+  // Settings больше не отдельный таб — живёт в profile avatar (topbar) → Settings-модалка.
+  // Ветка mobileTab==='settings' оставлена на случай старого persisted state: показываем
+  // inline, но новый UI юзера туда не загонит.
   const renderMobileSecondaryTab = () => {
     if (mobileTab === 'chats') return mobileChatsPane;
     if (mobileTab === 'devices') return mobileDevicesPane;
@@ -855,14 +858,15 @@ export default function AppShell({ user }: { user: User }) {
                 <span className="hidden md:inline text-[9.5px] px-1 py-px rounded" style={{ background: 'rgba(255,255,255,.14)' }}>⌘N</span>
               </button>
             )}
-            {/* Settings — иконка справа, открывает desktop-модалку */}
+            {/* Profile avatar — открывает Settings (Invites / Theme / Account + Logout) */}
             <button
               onClick={() => setShowSettings(true)}
-              className="hidden md:inline-flex w-9 h-9 rounded-md items-center justify-center"
-              style={{ background: 'var(--surface)', color: 'var(--fg-2)', border: '1px solid var(--border)' }}
-              aria-label="Settings"
+              className="inline-flex w-9 h-9 rounded-full items-center justify-center font-semibold text-[13px] shrink-0"
+              style={{ background: 'var(--accent)', color: 'var(--bg)' }}
+              aria-label="Профиль и настройки"
+              title={user.name || user.email}
             >
-              <SettingsIcon size={14} />
+              {(user.name || user.email)[0].toUpperCase()}
             </button>
             <button onClick={() => setRightOpen(!rightOpen)}
               className="hidden md:inline-flex font-mono items-center gap-1 px-2.5 py-1 rounded-md text-[12px]"
@@ -1257,7 +1261,7 @@ export default function AppShell({ user }: { user: User }) {
                   onChange={(e) => { setInput(e.target.value); setSlashOpen(e.target.value.startsWith('/')); setSlashIdx(0); }}
                   onKeyDown={onKey} rows={1}
                   disabled={sending || !activeProjectId}
-                  placeholder={!activeProjectId ? 'Выбери проект…' : sending ? 'Жду ответ…' : 'Сообщение…'}
+                  placeholder={!activeProjectId ? 'Выбери проект — поле ввода станет активным' : sending ? 'Жду ответ…' : 'Сообщение…'}
                   className="flex-1 bg-transparent outline-none resize-none text-[16px] md:text-[14px] leading-[1.4] placeholder:opacity-50 py-2 md:pt-0.5"
                   style={{ maxHeight: 200 }} />
                 {input.trim().length === 0 && !sending ? (
