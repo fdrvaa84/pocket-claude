@@ -25,9 +25,11 @@ interface Props {
   onClose: () => void;
   /** Вернуть выбранную папку — для создания проекта */
   onPick?: (path: string) => void;
+  /** Embedded-режим — без модалки/хедера, для вложения в другой контейнер */
+  embedded?: boolean;
 }
 
-export default function DeviceBrowser({ deviceId, deviceName, initialPath, onClose, onPick }: Props) {
+export default function DeviceBrowser({ deviceId, deviceName, initialPath, onClose, onPick, embedded = false }: Props) {
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -100,12 +102,9 @@ export default function DeviceBrowser({ deviceId, deviceName, initialPath, onClo
     !q.trim() || e.name.toLowerCase().includes(q.trim().toLowerCase())
   );
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(6px)' }} onClick={onClose}>
-      <div className="w-full max-w-xl h-[80dvh] rounded-2xl flex flex-col overflow-hidden"
-        style={{ background: 'var(--surface)', boxShadow: '0 8px 24px rgba(0,0,0,.15)' }}
-        onClick={e => e.stopPropagation()}>
-
+  const inner = (
+    <>
+      {!embedded && (
         <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
           <div>
             <div className="text-sm font-semibold">🖥 {deviceName}</div>
@@ -113,8 +112,9 @@ export default function DeviceBrowser({ deviceId, deviceName, initialPath, onClo
           </div>
           <button onClick={onClose} className="text-xl" style={{ color: 'var(--muted)' }}>×</button>
         </div>
+      )}
 
-        {/* crumbs */}
+      {/* crumbs */}
         <div className="px-5 py-2 flex items-center gap-1 text-xs overflow-x-auto whitespace-nowrap"
           style={{ borderBottom: '1px solid var(--border)', color: 'var(--muted)' }}>
           <button onClick={() => load(null)} className="hover:underline">корни</button>
@@ -265,6 +265,24 @@ export default function DeviceBrowser({ deviceId, deviceName, initialPath, onClo
             <div className="text-[11px]" style={{ color: 'var(--muted)' }}>Выбери корень для навигации</div>
           )}
         </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="flex flex-col h-[55dvh] min-h-[320px] rounded-xl overflow-hidden"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(6px)' }} onClick={onClose}>
+      <div className="w-full max-w-xl h-[80dvh] rounded-2xl flex flex-col overflow-hidden"
+        style={{ background: 'var(--surface)', boxShadow: '0 8px 24px rgba(0,0,0,.15)' }}
+        onClick={e => e.stopPropagation()}>
+        {inner}
       </div>
     </div>
   );

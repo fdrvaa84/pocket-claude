@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ArrowLeft, X, FolderOpen, FolderPlus, Loader2, ChevronRight } from 'lucide-react';
 import DeviceBrowser from './DeviceBrowser';
 import { effectiveIntent, type DeviceIntent } from '@/lib/device-intent';
 
@@ -16,13 +17,25 @@ interface Props {
   onCreated: (id: string) => void;
 }
 
-type Mode = null | 'pick-existing' | 'pick-parent';
+/**
+ * ProjectCreateModal — двухшаговый wizard.
+ *
+ * Шаг 1 · «Где»     — выбор устройства (+ при fs-only: выбор claude-device).
+ * Шаг 2 · «Что»     — действие: открыть существующую папку ИЛИ создать новую.
+ *                     После этого открывается DeviceBrowser; для «new» —
+ *                     третий скрин с вводом имени.
+ *
+ * Заголовок всегда показывает breadcrumb: `Новый проект · vpskz · Новая папка`,
+ * слева ◀ для возврата на предыдущий шаг.
+ */
+
+type Step = 'device' | 'action' | 'pick-existing' | 'pick-parent' | 'name-new';
 
 export default function ProjectCreateModal({ devices, onClose, onCreated }: Props) {
-  const [deviceId, setDeviceId] = useState<string | null>(devices.find(d => d.online)?.id || null);
+  const [step, setStep] = useState<Step>('device');
+  const [deviceId, setDeviceId] = useState<string | null>(null);
   const [claudeDeviceId, setClaudeDeviceId] = useState<string | null>(null);
-  const [mode, setMode] = useState<Mode>(null);
-  const [parentPath, setParentPath] = useState<string | null>(null);  // для режима "создать новую"
+  const [parentPath, setParentPath] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,7 +45,7 @@ export default function ProjectCreateModal({ devices, onClose, onCreated }: Prop
   const claudeCandidates = devices.filter(d => d.id !== deviceId && d.online && effectiveIntent(d) === 'claude');
   const proxyOk = !needsClaudeDevice || !!claudeDeviceId;
 
-  // Автовыбор первого подходящего claude-устройства при смене основного устройства.
+  // Автовыбор первого claude-кандидата при смене device
   useEffect(() => {
     if (needsClaudeDevice && !claudeDeviceId && claudeCandidates.length > 0) {
       setClaudeDeviceId(claudeCandidates[0].id);
@@ -43,8 +56,15 @@ export default function ProjectCreateModal({ devices, onClose, onCreated }: Prop
     return path.split('/').filter(Boolean).pop() || 'project';
   }
 
+  function goBack() {
+    setErr('');
+    if (step === 'action') setStep('device');
+    else if (step === 'pick-existing' || step === 'pick-parent') setStep('action');
+    else if (step === 'name-new') { setParentPath(null); setStep('pick-parent'); }
+  }
+
   async function createFromExisting(path: string) {
-    if (needsClaudeDevice && !claudeDeviceId) { setErr('Выбери устройство с claude'); return; }
+    if (needsClaudeDevice && !claudeDeviceId) { setErr('Выбери устройство с Claude'); return; }
     setErr(''); setBusy(true);
     const r = await fetch('/api/projects', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -54,27 +74,25 @@ export default function ProjectCreateModal({ devices, onClose, onCreated }: Prop
       }),
     });
     setBusy(false);
-    if (!r.ok) { const j = await r.json().catch(() => ({})); setErr(j.error || 'error'); return; }
+    if (!r.ok) { const j = await r.json().catch(() => ({})); setErr(j.error || 'ошибка'); return; }
     const j = await r.json();
     onCreated(j.id);
   }
 
   async function createNew() {
     setErr('');
-    if (!parentPath || !newName.trim()) { setErr('нужно имя'); return; }
-    if (!/^[\w.\- ]+$/.test(newName.trim())) { setErr('недопустимые символы в имени'); return; }
-    if (needsClaudeDevice && !claudeDeviceId) { setErr('Выбери устройство с claude'); return; }
+    if (!parentPath || !newName.trim()) { setErr('Нужно имя папки'); return; }
+    if (!/^[\w.\- ]+$/.test(newName.trim())) { setErr('Недопустимые символы в имени'); return; }
+    if (needsClaudeDevice && !claudeDeviceId) { setErr('Выбери устройство с Claude'); return; }
     setBusy(true);
-    // 1) mkdir
     const m = await fetch(`/api/devices/${deviceId}/mkdir`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: parentPath, name: newName.trim() }),
     });
     if (!m.ok) {
-      const j = await m.json().catch(() => ({})); setBusy(false); setErr(j.error || 'не удалось создать папку'); return;
+      const j = await m.json().catch(() => ({})); setBusy(false); setErr(j.error || 'Не удалось создать папку'); return;
     }
     const md = await m.json();
-    // 2) project
     const r = await fetch('/api/projects', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -88,147 +106,230 @@ export default function ProjectCreateModal({ devices, onClose, onCreated }: Prop
     onCreated(j.id);
   }
 
+  /* ============ BODY по шагам ============ */
+
+  const stepTitle =
+    step === 'device' ? 'Выбери устройство' :
+    step === 'action' ? 'Что будем делать?' :
+    step === 'pick-existing' ? 'Выбери папку' :
+    step === 'pick-parent' ? 'Где создать новую папку?' :
+    'Имя новой папки';
+
+  const breadcrumb = [
+    'Новый проект',
+    selectedDevice?.name,
+    step === 'pick-existing' ? 'Открыть существующую' :
+    step === 'pick-parent' || step === 'name-new' ? 'Создать новую' :
+    null,
+  ].filter(Boolean).join(' · ');
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(6px)' }} onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl p-5 flex flex-col gap-3"
+      style={{ background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(6px)' }}
+      onClick={onClose}
+    >
+      <div className="w-full max-w-md rounded-2xl flex flex-col overflow-hidden max-h-[90dvh]"
         style={{ background: 'var(--surface)', boxShadow: '0 8px 24px rgba(0,0,0,.15)' }}
-        onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-base font-semibold">Новый проект</h3>
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header с breadcrumb + ◀ Назад (только если не на первом шаге) */}
+        <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+          {step !== 'device' ? (
+            <button onClick={goBack} className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[var(--surface-2)]"
+              style={{ color: 'var(--fg-2)' }} aria-label="Назад">
+              <ArrowLeft size={18} />
+            </button>
+          ) : (
+            <div className="w-8" />
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="text-[15px] font-semibold truncate">{stepTitle}</div>
+            <div className="font-mono text-[10.5px] truncate" style={{ color: 'var(--muted)' }}>
+              {breadcrumb}
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-md flex items-center justify-center hover:bg-[var(--surface-2)]"
+            style={{ color: 'var(--muted)' }} aria-label="Закрыть">
+            <X size={18} />
+          </button>
+        </div>
 
-        {/* Device */}
-        <label className="text-xs" style={{ color: 'var(--muted)' }}>Устройство</label>
-        <div className="flex flex-col gap-1.5">
-          {devices.length === 0 && (
-            <div className="text-xs px-3 py-4 text-center rounded-lg"
-              style={{ background: 'var(--accent-light)', color: 'var(--muted)' }}>
-              Нет устройств. Settings → + Device.
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+
+          {/* === ШАГ 1: выбор устройства === */}
+          {step === 'device' && (
+            <>
+              {devices.length === 0 ? (
+                <div className="text-sm px-4 py-8 text-center rounded-xl"
+                  style={{ background: 'var(--accent-light)', color: 'var(--muted)' }}>
+                  <div className="text-2xl mb-2">📱</div>
+                  <div className="font-medium mb-1">Нет устройств</div>
+                  <div className="text-xs">Подключи первое — вкладка «Устройства» внизу</div>
+                </div>
+              ) : (
+                <>
+                  {devices.map(d => {
+                    const role = effectiveIntent(d);
+                    const active = deviceId === d.id;
+                    return (
+                      <button key={d.id} type="button"
+                        disabled={!d.online}
+                        onClick={() => {
+                          setDeviceId(d.id);
+                          setClaudeDeviceId(null);
+                          setParentPath(null);
+                          // Автопереход на шаг action через 150мс для визуального ответа
+                          setTimeout(() => setStep('action'), 120);
+                        }}
+                        className="flex items-center gap-3 px-3 py-3 rounded-xl text-left disabled:opacity-40"
+                        style={{
+                          minHeight: 64,
+                          border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                          background: active ? 'var(--accent-light)' : 'var(--surface-2)',
+                        }}>
+                        <span style={{ fontSize: 22 }}>{role === 'claude' ? '🤖' : '📂'}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[14px] font-medium truncate">{d.name}</div>
+                          <div className="text-[11px] font-mono" style={{ color: 'var(--muted)' }}>
+                            <span style={{ color: d.online ? 'var(--ok)' : 'var(--danger)' }}>
+                              {d.online ? 'онлайн' : 'оффлайн'}
+                            </span>
+                            {' · '}
+                            <span style={{ color: role === 'claude' ? 'var(--ok)' : 'var(--fg-2)' }}>
+                              {role === 'claude' ? 'claude' : 'только файлы'}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRight size={16} style={{ color: 'var(--muted)' }} />
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+            </>
+          )}
+
+          {/* === ШАГ 2: выбор действия (+ при необходимости — claude-device) === */}
+          {step === 'action' && (
+            <>
+              {/* Для fs-only устройств — селектор «где запускать Claude» */}
+              {needsClaudeDevice && (
+                <div className="p-3 rounded-xl flex flex-col gap-2" style={{ background: 'var(--accent-tint)', border: '1px solid var(--border)' }}>
+                  <div className="text-[12.5px] font-medium">Это устройство только для файлов</div>
+                  <div className="text-[11.5px]" style={{ color: 'var(--muted)' }}>
+                    Выбери где запускать Claude:
+                  </div>
+                  {claudeCandidates.length === 0 ? (
+                    <div className="text-xs px-2 py-2 rounded" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>
+                      Нет онлайн-устройств с Claude. Подключи хотя бы одно.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      {claudeCandidates.map(d => (
+                        <button key={d.id} type="button"
+                          onClick={() => setClaudeDeviceId(d.id)}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm"
+                          style={{
+                            minHeight: 40,
+                            border: `1px solid ${claudeDeviceId === d.id ? 'var(--accent)' : 'var(--border)'}`,
+                            background: claudeDeviceId === d.id ? 'var(--surface)' : 'transparent',
+                          }}>
+                          <span>{d.kind === 'laptop' ? '💻' : '🖥'}</span>
+                          <span className="flex-1">{d.name}</span>
+                          <span className="font-mono text-[10px]" style={{ color: 'var(--ok)' }}>claude ✓</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Две кнопки-действия (disabled если fs-only и не выбран claude) */}
+              <button type="button" disabled={!proxyOk}
+                onClick={() => setStep('pick-existing')}
+                className="p-4 rounded-xl text-left flex items-start gap-3 disabled:opacity-40"
+                style={{
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-2)',
+                  minHeight: 80,
+                }}>
+                <FolderOpen size={22} style={{ color: 'var(--accent)' }} />
+                <div className="flex-1">
+                  <div className="text-[14px] font-medium">Открыть существующую папку</div>
+                  <div className="text-[11.5px] mt-0.5" style={{ color: 'var(--muted)' }}>
+                    Например, уже клонированный репозиторий
+                  </div>
+                </div>
+                <ChevronRight size={16} style={{ color: 'var(--muted)' }} />
+              </button>
+              <button type="button" disabled={!proxyOk}
+                onClick={() => { setParentPath(null); setStep('pick-parent'); }}
+                className="p-4 rounded-xl text-left flex items-start gap-3 disabled:opacity-40"
+                style={{
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-2)',
+                  minHeight: 80,
+                }}>
+                <FolderPlus size={22} style={{ color: 'var(--vibrant)' }} />
+                <div className="flex-1">
+                  <div className="text-[14px] font-medium">Создать новую папку</div>
+                  <div className="text-[11.5px] mt-0.5" style={{ color: 'var(--muted)' }}>
+                    Выберешь где, впишешь имя
+                  </div>
+                </div>
+                <ChevronRight size={16} style={{ color: 'var(--muted)' }} />
+              </button>
+            </>
+          )}
+
+          {/* === ШАГ 3a: выбор существующей папки === */}
+          {(step === 'pick-existing' || step === 'pick-parent') && deviceId && (
+            <DeviceBrowser
+              deviceId={deviceId}
+              deviceName={selectedDevice?.name || ''}
+              initialPath={selectedDevice?.root_path || null}
+              onClose={() => { /* back-arrow в header обрабатывает это */ }}
+              onPick={(path) => {
+                if (step === 'pick-existing') createFromExisting(path);
+                else { setParentPath(path); setStep('name-new'); }
+              }}
+              embedded
+            />
+          )}
+
+          {/* === ШАГ 3b: ввод имени новой папки === */}
+          {step === 'name-new' && parentPath && (
+            <div className="p-3 rounded-xl flex flex-col gap-2" style={{ background: 'var(--accent-light)', border: '1px solid var(--border)' }}>
+              <div className="text-[11.5px]" style={{ color: 'var(--muted)' }}>Создаю в папке:</div>
+              <div className="text-[12px] font-mono truncate" style={{ color: 'var(--fg)' }}>{parentPath}</div>
+              <label className="text-[11.5px] mt-2" style={{ color: 'var(--muted)' }}>Имя папки</label>
+              <input value={newName} autoFocus
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') createNew(); }}
+                placeholder="my-project"
+                className="px-3 py-2.5 rounded-lg text-[14px] bg-[var(--bg)] outline-none font-mono"
+                style={{ border: '1px solid var(--border)', color: 'var(--fg)', minHeight: 44 }}
+              />
+              <div className="text-[11px] font-mono truncate" style={{ color: 'var(--muted)' }}>
+                → {parentPath}/<b>{newName || 'имя'}</b>
+              </div>
+              <button onClick={createNew} disabled={busy || !newName.trim()}
+                className="btn btn-primary mt-2 flex items-center justify-center gap-2">
+                {busy && <Loader2 size={14} className="animate-spin" />}
+                Создать проект
+              </button>
             </div>
           )}
-          {devices.map(d => {
-            const role = effectiveIntent(d);
-            return (
-              <button key={d.id} onClick={() => { setDeviceId(d.id); setParentPath(null); setClaudeDeviceId(null); }} type="button"
-                disabled={!d.online}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-left disabled:opacity-50"
-                style={{
-                  border: `1px solid ${deviceId === d.id ? 'var(--accent)' : 'var(--border)'}`,
-                  background: deviceId === d.id ? 'var(--accent-light)' : 'transparent',
-                }}>
-                <span className="text-lg">{role === 'claude' ? '🤖' : '📂'}</span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm">{d.name}</span>
-                  <span className="block text-[10.5px]" style={{ color: 'var(--muted)' }}>
-                    {d.online ? 'онлайн' : 'оффлайн'}
-                    {' · '}
-                    <span style={{ color: role === 'claude' ? 'var(--ok)' : 'var(--fg-2)' }}>
-                      {role === 'claude' ? 'claude' : 'files-only'}
-                    </span>
-                  </span>
-                </span>
-                <span className="w-2 h-2 rounded-full" style={{ background: d.online ? 'var(--ok)' : 'var(--danger)' }} />
-              </button>
-            );
-          })}
-        </div>
 
-        {/* Где запускать Claude — показывается если на выбранном устройстве нет claude login */}
-        {needsClaudeDevice && (
-          <div className="mt-1 p-3 rounded-xl flex flex-col gap-2" style={{ background: 'var(--accent-tint)', border: '1px solid var(--border)' }}>
-            <div className="text-xs" style={{ color: 'var(--fg)' }}>
-              Где запускать Claude?
+          {err && (
+            <div className="text-[12.5px] px-3 py-2 rounded-lg flex items-start gap-2"
+              style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>
+              ⚠ {err}
             </div>
-            {claudeCandidates.length === 0 ? (
-              <div className="text-xs px-2 py-2 rounded" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>
-                Нет онлайн-устройств с Claude. Подключи хотя бы одно в Settings.
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {claudeCandidates.map(d => (
-                  <button key={d.id} type="button"
-                    onClick={() => setClaudeDeviceId(d.id)}
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-sm"
-                    style={{
-                      border: `1px solid ${claudeDeviceId === d.id ? 'var(--accent)' : 'var(--border)'}`,
-                      background: claudeDeviceId === d.id ? 'var(--surface)' : 'transparent',
-                    }}>
-                    <span>{d.kind === 'laptop' ? '💻' : '🖥'}</span>
-                    <span className="flex-1">{d.name}</span>
-                    <span className="font-mono text-[10px]" style={{ color: 'var(--ok)' }}>claude ✓</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Две большие кнопки */}
-        <div className="flex flex-col gap-2 mt-1">
-          <button type="button" disabled={!deviceId || !selectedDevice?.online || !proxyOk}
-            onClick={() => setMode('pick-existing')}
-            className="p-3 rounded-xl text-left flex items-start gap-3 disabled:opacity-40"
-            style={{ border: '1px solid var(--border)' }}>
-            <div className="text-xl">📂</div>
-            <div className="flex-1">
-              <div className="text-sm font-medium">Выбрать существующую папку</div>
-              <div className="text-[11px]" style={{ color: 'var(--muted)' }}>Например, уже клонированный репозиторий</div>
-            </div>
-          </button>
-          <button type="button" disabled={!deviceId || !selectedDevice?.online || !proxyOk}
-            onClick={() => { setMode('pick-parent'); setParentPath(null); }}
-            className="p-3 rounded-xl text-left flex items-start gap-3 disabled:opacity-40"
-            style={{ border: '1px solid var(--border)' }}>
-            <div className="text-xl">🆕</div>
-            <div className="flex-1">
-              <div className="text-sm font-medium">Создать новую папку</div>
-              <div className="text-[11px]" style={{ color: 'var(--muted)' }}>Выберешь где, впишешь имя</div>
-            </div>
-          </button>
-        </div>
-
-        {/* Форма для режима "создать новую" — показывается после выбора parent */}
-        {mode === 'pick-parent' && parentPath && (
-          <div className="mt-1 p-3 rounded-xl flex flex-col gap-2" style={{ background: 'var(--accent-light)', border: '1px solid var(--border)' }}>
-            <div className="text-xs" style={{ color: 'var(--muted)' }}>Создаю в:</div>
-            <div className="text-xs font-mono truncate">{parentPath}</div>
-            <label className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Имя папки</label>
-            <input value={newName} autoFocus onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') createNew(); }}
-              placeholder="my-bot"
-              className="px-3 py-2 rounded-lg text-sm bg-[var(--bg)] outline-none font-mono"
-              style={{ border: '1px solid var(--border)', color: 'var(--fg)' }} />
-            <div className="text-[11px] font-mono truncate" style={{ color: 'var(--muted)' }}>
-              → {parentPath}/<b>{newName || 'имя'}</b>
-            </div>
-            <div className="flex gap-2 mt-1">
-              <button onClick={() => { setParentPath(null); setNewName(''); }} className="btn-secondary text-xs">← Назад</button>
-              <div className="flex-1" />
-              <button onClick={createNew} disabled={busy || !newName.trim()} className="btn-primary text-xs disabled:opacity-40">
-                {busy ? '...' : 'Создать'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {err && <div className="text-xs" style={{ color: 'var(--danger)' }}>{err}</div>}
-
-        <div className="flex justify-end gap-2 mt-2">
-          <button onClick={onClose} className="btn-secondary">Закрыть</button>
+          )}
         </div>
       </div>
-
-      {/* Browser для обоих режимов. В pick-existing сразу создаём проект. В pick-parent — запоминаем как parent. */}
-      {mode && deviceId && !parentPath && (
-        <DeviceBrowser
-          deviceId={deviceId}
-          deviceName={selectedDevice?.name || ''}
-          onClose={() => setMode(null)}
-          onPick={(path) => {
-            if (mode === 'pick-existing') { createFromExisting(path); setMode(null); }
-            else { setParentPath(path); }
-          }}
-        />
-      )}
     </div>
   );
 }
