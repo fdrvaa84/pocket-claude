@@ -6,37 +6,38 @@
 /* ============ Themes ============ */
 
 :root, html[data-theme="soft"] {
-  --bg: #efece4;
-  --bg-2: #ebe7dc;
-  --surface: #f7f5ee;
-  --surface-2: #e8e4d8;
-  --surface-hover: #ebe5d4;
-  --border: #d4cfc1;
-  --border-strong: #beb9a6;
-  --fg: #3a3631;
-  --fg-2: #57534e;
-  --muted: #8a8478;
-  --accent: #3a3631;
-  --accent-2: #57534e;
-  --accent-light: #e8e4d8;
-  --accent-tint: rgba(58,54,49,.06);
-  /* Vibrant — единственный яркий акцент для CTA и активных состояний */
-  --vibrant: #c45f3c;
-  --vibrant-2: #b04f2e;
-  --vibrant-tint: rgba(196,95,60,.10);
+  /* === Cool stone + emerald — ушли от Claude warm-earth (apr 2026) === */
+  --bg: #f4f4f3;
+  --bg-2: #e9e9e7;
+  --surface: #ffffff;
+  --surface-2: #f0f0ee;
+  --surface-hover: #ebebe9;
+  --border: #d4d4d2;
+  --border-strong: #a3a3a1;
+  --fg: #18181b;
+  --fg-2: #3f3f46;
+  --muted: #71717a;
+  --accent: #18181b;
+  --accent-2: #27272a;
+  --accent-light: #f0f0ee;
+  --accent-tint: rgba(24,24,27,.06);
+  /* Vibrant — deep emerald, единственный яркий акцент для CTA и активных состояний */
+  --vibrant: #047857;
+  --vibrant-2: #065f46;
+  --vibrant-tint: rgba(4,120,87,.10);
   --vibrant-fg: #ffffff;
-  --danger: #b85a4a;
-  --danger-bg: #f4e3df;
-  --ok: #5a8f5f;
-  --warn: #c08048;
-  --info: #4a7ab8;
+  --danger: #b91c1c;
+  --danger-bg: #fee2e2;
+  --ok: #047857;
+  --warn: #b45309;
+  --info: #1d4ed8;
   --radius-sm: 8px;
   --radius: 14px;
   --radius-lg: 20px;
-  --shadow-sm: 0 1px 2px rgba(58,54,49,.06);
-  --shadow: 0 2px 8px rgba(58,54,49,.08), 0 0 0 1px rgba(58,54,49,.04);
-  --shadow-lg: 0 12px 32px rgba(58,54,49,.14), 0 0 0 1px rgba(58,54,49,.06);
-  --code-bg: #ece7d8;
+  --shadow-sm: 0 1px 2px rgba(24,24,27,.05);
+  --shadow: 0 2px 8px rgba(24,24,27,.06), 0 0 0 1px rgba(24,24,27,.04);
+  --shadow-lg: 0 12px 32px rgba(24,24,27,.10), 0 0 0 1px rgba(24,24,27,.05);
+  --code-bg: #efeeec;
 }
 
 html[data-theme="light"] {
@@ -46,9 +47,9 @@ html[data-theme="light"] {
   --fg: #111827; --fg-2: #374151; --muted: #6b7280;
   --accent: #111827; --accent-2: #1f2937;
   --accent-light: #f3f4f6; --accent-tint: rgba(0,0,0,.04);
-  --vibrant: #db5f37; --vibrant-2: #c14e2b; --vibrant-tint: rgba(219,95,55,.10); --vibrant-fg: #ffffff;
+  --vibrant: #047857; --vibrant-2: #065f46; --vibrant-tint: rgba(4,120,87,.10); --vibrant-fg: #ffffff;
   --danger: #dc2626; --danger-bg: #fee2e2;
-  --ok: #16a34a; --warn: #d97706; --info: #2563eb;
+  --ok: #047857; --warn: #d97706; --info: #2563eb;
   --shadow-sm: 0 1px 2px rgba(0,0,0,.04);
   --shadow: 0 2px 8px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.04);
   --shadow-lg: 0 12px 32px rgba(0,0,0,.10), 0 0 0 1px rgba(0,0,0,.05);
@@ -62,9 +63,9 @@ html[data-theme="dark"] {
   --fg: #f3f4f6; --fg-2: #d1d5db; --muted: #9ca3af;
   --accent: #f3f4f6; --accent-2: #e5e7eb;
   --accent-light: #1a1a1a; --accent-tint: rgba(255,255,255,.04);
-  --vibrant: #e87454; --vibrant-2: #f08560; --vibrant-tint: rgba(232,116,84,.14); --vibrant-fg: #0a0a0a;
+  --vibrant: #10b981; --vibrant-2: #34d399; --vibrant-tint: rgba(16,185,129,.14); --vibrant-fg: #0a0a0a;
   --danger: #f87171; --danger-bg: #2a1413;
-  --ok: #4ade80; --warn: #fbbf24; --info: #60a5fa;
+  --ok: #34d399; --warn: #fbbf24; --info: #60a5fa;
   --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
   --shadow: 0 2px 8px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04);
   --shadow-lg: 0 12px 32px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06);
