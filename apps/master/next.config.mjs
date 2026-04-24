@@ -7,6 +7,6 @@ const nextConfig = {
     serverComponentsExternalPackages: ['ssh2'],
   },
   // Transpile monorepo packages
-  transpilePackages: ['@pocket-claude/protocol'],
+  transpilePackages: ['@autmzr/command-protocol'],
 };
 export default nextConfig;

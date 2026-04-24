@@ -65,7 +65,7 @@ export default function AuthScreen({ needSetup, onAuth }: Props) {
             style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
             <Sparkles size={22} strokeWidth={2.2} />
           </div>
-          <h1 className="text-[22px] font-semibold tracking-tight">Pocket Claude</h1>
+          <h1 className="text-[22px] font-semibold tracking-tight">Autmzr Command</h1>
           <p className="text-[13px] mt-1.5" style={{ color: 'var(--muted)' }}>
             {needSetup
               ? 'Создай аккаунт администратора'

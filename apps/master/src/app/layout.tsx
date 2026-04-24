@@ -3,8 +3,8 @@ import './globals.css';
 import ClientBoot from '@/components/ClientBoot';
 
 export const metadata: Metadata = {
-  title: 'Pocket Claude',
-  description: 'Your Claude Code in your pocket',
+  title: 'Autmzr Command',
+  description: 'Your AI command center. In your pocket.',
 };
 export const viewport: Viewport = {
   width: 'device-width', initialScale: 1, maximumScale: 1, userScalable: false,

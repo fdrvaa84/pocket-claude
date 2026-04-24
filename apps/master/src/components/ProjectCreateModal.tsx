@@ -7,7 +7,7 @@ import { effectiveIntent, type DeviceIntent } from '@/lib/device-intent';
 interface Device {
   id: string; name: string; kind: string; online: boolean;
   root_path?: string | null;
-  claude_logged_in?: boolean | null;
+  agent_logged_in?: boolean | null;
   intent?: DeviceIntent | null;
 }
 interface Props {

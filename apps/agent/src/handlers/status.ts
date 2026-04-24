@@ -3,7 +3,7 @@ import { statfs } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import type { StatusRequest, StatusReply } from '@pocket-claude/protocol';
+import type { StatusRequest, StatusReply } from '@autmzr/command-protocol';
 
 export async function handleStatus(req: StatusRequest): Promise<StatusReply> {
   const claude = await probeClaude();

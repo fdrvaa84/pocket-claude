@@ -30,12 +30,12 @@ export async function POST(req: NextRequest) {
     if (!d) return NextResponse.json({ error: 'Device not found' }, { status: 400 });
   }
   if (claude_device_id) {
-    const cd = await queryOne<{ id: string; claude_logged_in: boolean | null }>(
-      `SELECT id, claude_logged_in FROM pc.devices WHERE id = $1 AND user_id = $2`,
+    const cd = await queryOne<{ id: string; agent_logged_in: boolean | null }>(
+      `SELECT id, agent_logged_in FROM pc.devices WHERE id = $1 AND user_id = $2`,
       [claude_device_id, user.id],
     );
     if (!cd) return NextResponse.json({ error: 'Claude device not found' }, { status: 400 });
-    if (cd.claude_logged_in !== true) {
+    if (cd.agent_logged_in !== true) {
       return NextResponse.json({ error: 'Claude device has no `claude login`' }, { status: 400 });
     }
   }

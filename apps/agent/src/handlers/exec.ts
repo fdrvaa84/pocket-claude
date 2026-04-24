@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@pocket-claude/protocol';
+import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@autmzr/command-protocol';
 import { safePath, screenCommand, SafetyError } from '../safety.js';
 
 export function handleExec(

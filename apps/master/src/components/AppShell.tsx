@@ -26,7 +26,7 @@ interface Device {
   id: string; name: string; kind: string; hostname: string | null;
   os?: string | null; arch?: string | null;
   online: boolean;
-  claude_logged_in: boolean | null; last_online: string | null; root_path: string | null;
+  agent_logged_in: boolean | null; last_online: string | null; root_path: string | null;
   intent?: DeviceIntent | null;
 }
 interface Project {
@@ -490,7 +490,7 @@ export default function AppShell({ user }: { user: User }) {
                 <span className="font-mono text-[10px] shrink-0" style={{ color: 'var(--muted)' }}>
                   {d.os === 'darwin' ? 'mac' : d.os === 'linux' ? 'linux' : d.os === 'win32' ? 'win' : d.kind}
                 </span>
-                {role === 'claude' && d.online && d.claude_logged_in === false && (
+                {role === 'claude' && d.online && d.agent_logged_in === false && (
                   <span className="font-mono text-[9.5px] shrink-0" title="нет claude login" style={{ color: 'var(--warn)' }}>⚠</span>
                 )}
               </button>
@@ -694,7 +694,7 @@ export default function AppShell({ user }: { user: User }) {
                                 {d.root_path}
                               </span>
                             )}
-                            {d.online && d.claude_logged_in === false && (
+                            {d.online && d.agent_logged_in === false && (
                               <span className="font-mono text-[10.5px] shrink-0" style={{ color: 'var(--warn)' }}>⚠ no_login</span>
                             )}
                             <span className="font-mono text-[11px] shrink-0 opacity-40 group-hover:opacity-100" style={{ color: 'var(--muted)' }}>→</span>

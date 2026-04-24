@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   ClaudeRequest, ClaudeEvent, ClaudeDone, ClaudeError, McpServerSpec,
   FsReadRequest, FsReadReply,
-} from '@pocket-claude/protocol';
+} from '@autmzr/command-protocol';
 import { processClaudeMessage, startJob } from '@/lib/job-tracker';
 import { issueRfsToken } from '@/lib/rfs-tokens';
 import { effectiveIntent } from '@/lib/device-intent';
@@ -42,10 +42,10 @@ export async function POST(req: NextRequest) {
           permissionMode = 'bypassPermissions', effort = 'medium' } = await req.json();
   if (!message || typeof message !== 'string') return new Response('message required', { status: 400 });
 
-  // Загружаем проект и устройство — включая intent/claude_logged_in для выбора режима.
+  // Загружаем проект и устройство — включая intent/agent_logged_in для выбора режима.
   const project = projectId ? await queryOne<any>(
     `SELECT p.id, p.name, p.path, p.device_id, p.claude_device_id, p.instructions,
-            d.name as device_name, d.intent as device_intent, d.claude_logged_in as device_claude_logged_in,
+            d.name as device_name, d.intent as device_intent, d.agent_logged_in as device_agent_logged_in,
             cd.name as claude_device_name
      FROM pc.projects p
      LEFT JOIN pc.devices d  ON d.id  = p.device_id
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   //   claude device  → используем его самого для claude
   const fsDeviceRole = effectiveIntent({
     intent: project!.device_intent,
-    claude_logged_in: project!.device_claude_logged_in,
+    agent_logged_in: project!.device_agent_logged_in,
   });
   const isProxy: boolean = fsDeviceRole === 'fs-only';
   if (isProxy && !project!.claude_device_id) {

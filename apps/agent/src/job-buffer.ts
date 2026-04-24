@@ -1,7 +1,7 @@
 import { mkdirSync, existsSync, writeFileSync, readFileSync, appendFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import type { ClaudeEvent, ClaudeDone, ClaudeError, ClaudeRequest } from '@pocket-claude/protocol';
+import type { ClaudeEvent, ClaudeDone, ClaudeError, ClaudeRequest } from '@autmzr/command-protocol';
 
 const JOBS_DIR = join(homedir(), '.pocket-claude', 'jobs');
 

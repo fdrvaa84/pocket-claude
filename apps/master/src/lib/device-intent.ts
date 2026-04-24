@@ -1,5 +1,5 @@
 /**
- * Device intent — roles pocket-claude knows about.
+ * Device intent — roles autmzr-command knows about.
  * Shared between server routes and UI so decisions stay consistent.
  */
 
@@ -7,7 +7,7 @@ export type DeviceIntent = 'auto' | 'claude' | 'fs-only';
 
 export interface DeviceLike {
   intent?: DeviceIntent | string | null;
-  claude_logged_in?: boolean | null;
+  agent_logged_in?: boolean | null;
 }
 
 /** Effective role after applying `auto` fallback to heuristic. */
@@ -15,7 +15,7 @@ export function effectiveIntent(d: DeviceLike): 'claude' | 'fs-only' {
   const i = (d.intent || 'auto') as DeviceIntent;
   if (i === 'claude') return 'claude';
   if (i === 'fs-only') return 'fs-only';
-  return d.claude_logged_in === true ? 'claude' : 'fs-only';
+  return d.agent_logged_in === true ? 'claude' : 'fs-only';
 }
 
 /** Чистый тип-гард — нужно ли для этого проекта делать proxy-диспатч. */

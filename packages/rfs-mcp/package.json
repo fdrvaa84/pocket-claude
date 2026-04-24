@@ -1,11 +1,11 @@
 {
-  "name": "@pocket-claude/rfs-mcp",
+  "name": "@autmzr/command-rfs-mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "pocket-claude-rfs": "dist/index.js"
+    "autmzr-command-rfs": "dist/index.js"
   },
   "scripts": {
     "build": "tsup",

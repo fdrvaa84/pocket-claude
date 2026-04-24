@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
-import type { ClaudeRequest, ClaudeEvent, ClaudeDone, ClaudeError, McpServerSpec } from '@pocket-claude/protocol';
+import type { ClaudeRequest, ClaudeEvent, ClaudeDone, ClaudeError, McpServerSpec } from '@autmzr/command-protocol';
 import { safePath, SafetyError } from '../safety.js';
 import { jobStart, jobAppend, jobFinish } from '../job-buffer.js';
 
@@ -13,7 +13,7 @@ import { jobStart, jobAppend, jobFinish } from '../job-buffer.js';
  *  1. $PC_RFS_MCP_PATH
  *  2. рядом с текущим agent.js (одна папка, для bundled варианта)
  *  3. ~/.pocket-claude/rfs-mcp.js (если connect.sh его положил)
- *  4. node_modules/@pocket-claude/rfs-mcp/dist/index.js (для dev)
+ *  4. node_modules/@autmzr/command-rfs-mcp/dist/index.js (для dev)
  */
 function resolveRfsMcpPath(): string | null {
   if (process.env.PC_RFS_MCP_PATH && existsSync(process.env.PC_RFS_MCP_PATH)) {

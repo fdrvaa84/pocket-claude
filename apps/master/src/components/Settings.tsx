@@ -12,9 +12,10 @@ const InvitesPanel = dynamic(() => import('./InvitesPanel'), { ssr: false, loadi
 interface User { id: string; email: string; name: string | null }
 interface Device {
   id: string; name: string; kind: string; hostname: string | null;
-  os?: string | null; arch?: string | null; online: boolean; claude_logged_in: boolean | null;
-  claude_installed?: boolean | null;
-  claude_version?: string | null;
+  os?: string | null; arch?: string | null; online: boolean; agent_logged_in: boolean | null;
+  agent_installed?: boolean | null;
+  agent_version?: string | null;
+  agent_kind?: string | null;
   last_online: string | null; root_path: string | null;
   intent?: DeviceIntent | null;
 }
@@ -93,15 +94,15 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
             <div className="text-[11px] font-mono truncate" style={{ color: 'var(--muted)' }}>
               {d.hostname || d.id.slice(0, 8)}{d.os ? ` · ${d.os}/${d.arch}` : ''} · {intentLabel}
             </div>
-            {/* Claude-статус: installed + logged_in. Кнопки «Установить» / «Войти» */}
+            {/* Agent-статус: installed + logged_in. Кнопки «Установить» / «Войти» */}
             {role === 'claude' && d.online && (() => {
-              const installed = d.claude_installed === true;
-              const legacyKnown = d.claude_installed == null; // старый agent не репортил installed
-              const loggedIn = d.claude_logged_in === true;
+              const installed = d.agent_installed === true;
+              const legacyKnown = d.agent_installed == null; // старый agent не репортил installed
+              const loggedIn = d.agent_logged_in === true;
               if (installed && loggedIn) {
                 return (
                   <div className="text-[11px] flex items-center gap-1" style={{ color: 'var(--ok)' }}>
-                    ✓ Claude {d.claude_version ? `v${d.claude_version}` : ''} · авторизован
+                    ✓ AI-агент {d.agent_version ? `v${d.agent_version}` : ''} · авторизован
                   </div>
                 );
               }
@@ -109,7 +110,7 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
                 return (
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     <span className="text-[11px]" style={{ color: 'var(--warn)' }}>
-                      ⚠ Claude {d.claude_version ? `v${d.claude_version}` : ''} · не авторизован
+                      ⚠ AI-агент {d.agent_version ? `v${d.agent_version}` : ''} · не авторизован
                     </span>
                     <button onClick={(e) => { e.stopPropagation(); setLoginFor(d); }}
                       className="text-[10.5px] px-2 py-0.5 rounded-full"
@@ -119,16 +120,16 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
                   </div>
                 );
               }
-              if (d.claude_installed === false) {
+              if (d.agent_installed === false) {
                 return (
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     <span className="text-[11px]" style={{ color: 'var(--danger)' }}>
-                      ❌ Claude не установлен
+                      ❌ AI-агент не установлен
                     </span>
                     <button onClick={(e) => { e.stopPropagation(); setInstallFor(d); }}
                       className="text-[10.5px] px-2 py-0.5 rounded-full"
                       style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
-                      📥 Установить
+                      📥 Установить агента
                     </button>
                   </div>
                 );
@@ -148,7 +149,7 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
                     <button onClick={(e) => { e.stopPropagation(); setInstallFor(d); }}
                       className="text-[10.5px] px-2 py-0.5 rounded-full"
                       style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                      📥 Установить
+                      📥 Установить агента
                     </button>
                   </div>
                 );
@@ -186,7 +187,7 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
             {d.intent !== 'auto' && (
               <button onClick={() => { setIntent(d.id, 'auto'); setOpenMenuId(null); }}
                 className="text-xs px-3 py-1.5 rounded-full"
-                style={{ background: 'var(--accent-light)' }} title="Определять по claude_logged_in">↻ auto</button>
+                style={{ background: 'var(--accent-light)' }} title="Определять по agent_logged_in">↻ auto</button>
             )}
             <button onClick={() => deleteDevice(d.id)}
               className="text-xs px-3 py-1.5 rounded-full"

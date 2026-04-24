@@ -8,7 +8,7 @@ import type {
   FsWriteRequest, FsWriteReply,
   FsDeleteRequest, FsDeleteReply,
   FsMkdirRequest, FsMkdirReply,
-} from '@pocket-claude/protocol';
+} from '@autmzr/command-protocol';
 
 async function resolveProject(req: NextRequest, userId: string) {
   const projectId = req.nextUrl.searchParams.get('projectId') || (await safeBody(req)).projectId;
