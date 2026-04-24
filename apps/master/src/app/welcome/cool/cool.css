@@ -1,0 +1,53 @@
+/* ==========================================================================
+   /welcome/cool — палитра переписана vs базовый /welcome.
+   Layout/components те же (импортируем из /components/landing/*).
+   Все компоненты юзают var(--xxx) — переопределяем здесь scope'd под .cool-root.
+   Цель: уйти от Claude warm-earth → cool-stone + emerald.
+   ========================================================================== */
+
+.cool-root {
+  /* === Cool stone palette === */
+  --bg:        #f4f4f3;          /* cool stone-100, чуть холоднее чем claude beige */
+  --bg-2:      #e9e9e7;          /* секции через одну, слегка холоднее */
+  --surface:   #ffffff;          /* карточки — чисто белые, контраст к stone bg */
+  --surface-2: #f0f0ee;
+  --surface-hover: #ebebe9;
+  --border:    #d4d4d2;          /* мягкие cool-borders */
+  --border-strong: #a3a3a1;
+
+  --fg:        #18181b;          /* near-black, slight cool tint */
+  --fg-2:      #3f3f46;
+  --muted:     #71717a;          /* zinc-500 cool */
+
+  --accent:    #18181b;          /* основной CTA bg = тёмный */
+  --accent-2:  #27272a;
+  --accent-light: #f0f0ee;
+  --accent-tint: rgba(24,24,27,.06);
+
+  /* === Vibrant: deep emerald (вместо терракотового Claude-orange) === */
+  --vibrant:    #047857;         /* emerald-700: дев-natural, totally not Claude */
+  --vibrant-2:  #065f46;         /* emerald-800 для hover */
+  --vibrant-tint: rgba(4,120,87,.10);
+  --vibrant-fg:   #ffffff;
+
+  --danger:    #b91c1c;
+  --danger-bg: #fee2e2;
+  --ok:        #047857;          /* совпадает с vibrant — единый зелёный */
+  --warn:      #b45309;
+  --info:      #1d4ed8;
+
+  --radius-sm: 8px;
+  --radius:    14px;
+  --radius-lg: 20px;
+
+  --shadow-sm: 0 1px 2px rgba(24,24,27,.05);
+  --shadow:    0 2px 8px rgba(24,24,27,.06), 0 0 0 1px rgba(24,24,27,.04);
+  --shadow-lg: 0 12px 32px rgba(24,24,27,.10), 0 0 0 1px rgba(24,24,27,.05);
+
+  --code-bg: #efeeec;
+
+  /* эти font/feature переменные могут не быть в globals — на всякий случай */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
