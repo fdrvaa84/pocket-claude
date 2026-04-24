@@ -107,6 +107,30 @@ export default function AppShell({ user }: { user: User }) {
     const id = setInterval(() => setVoiceTimer((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, [speech.listening]);
+  // После окончания записи — фокусим textarea, ставим курсор в конец,
+  // авто-ресайзим под распознанный текст. Двойной requestAnimationFrame —
+  // нужен чтобы условный render успел смонтировать textarea заново.
+  const wasListeningRef = useRef(false);
+  useEffect(() => {
+    if (wasListeningRef.current && !speech.listening) {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const ta = taRef.current;
+        if (!ta) return;
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+        // Курсор в конец, фокус только на десктопе (на мобильном не зовём
+        // клавиатуру автоматически — юзер сам тапнет если хочет править)
+        const len = ta.value.length;
+        try { ta.setSelectionRange(len, len); } catch {}
+        if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+          ta.focus();
+        }
+        // Скролл textarea в самый низ если контент длинный
+        ta.scrollTop = ta.scrollHeight;
+      }));
+    }
+    wasListeningRef.current = speech.listening;
+  }, [speech.listening]);
   // ================================================================
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
