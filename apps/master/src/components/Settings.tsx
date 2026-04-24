@@ -7,6 +7,7 @@ import { effectiveIntent, type DeviceIntent } from '@/lib/device-intent';
 
 const ClaudeInstallModal = dynamic(() => import('./ClaudeInstallModal'), { ssr: false, loading: () => null });
 const ClaudeLoginModal = dynamic(() => import('./ClaudeLoginModal'), { ssr: false, loading: () => null });
+const GeminiSetupModal = dynamic(() => import('./GeminiSetupModal'), { ssr: false, loading: () => null });
 const InvitesPanel = dynamic(() => import('./InvitesPanel'), { ssr: false, loading: () => null });
 
 interface User { id: string; email: string; name: string | null }
@@ -16,6 +17,12 @@ interface Device {
   agent_installed?: boolean | null;
   agent_version?: string | null;
   agent_kind?: string | null;
+  /** Gemini CLI status (Google's gemini) */
+  gemini_installed?: boolean | null;
+  gemini_version?: string | null;
+  gemini_logged_in?: boolean | null;
+  /** Какой провайдер использовать по умолчанию на этом девайсе */
+  preferred_agent?: 'claude-code' | 'gemini-cli' | null;
   last_online: string | null; root_path: string | null;
   intent?: DeviceIntent | null;
 }
@@ -37,6 +44,15 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
   const [editRootFor, setEditRootFor] = useState<Device | null>(null);
   const [installFor, setInstallFor] = useState<Device | null>(null);
   const [loginFor, setLoginFor] = useState<Device | null>(null);
+  const [geminiFor, setGeminiFor] = useState<Device | null>(null);
+
+  async function setPreferredAgent(deviceId: string, provider: 'claude-code' | 'gemini-cli') {
+    await fetch('/api/devices', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: deviceId, preferred_agent: provider }),
+    });
+    onReload();
+  }
 
   async function deleteDevice(id: string) {
     if (!confirm('Отключить устройство? Агент потеряет токен.')) return;
@@ -156,6 +172,59 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
               }
               return null;
             })()}
+
+            {/* Gemini-статус (показываем только на claude-девайсе и онлайне) */}
+            {role === 'claude' && d.online && (() => {
+              const gInstalled = d.gemini_installed === true;
+              const gLoggedIn = d.gemini_logged_in === true;
+              if (gInstalled && gLoggedIn) {
+                return (
+                  <div className="text-[11px] flex items-center gap-1 mt-0.5" style={{ color: 'var(--ok)' }}>
+                    ✨ Gemini {d.gemini_version ? `v${d.gemini_version}` : ''} · готов
+                  </div>
+                );
+              }
+              // Gemini не установлен / не настроен → одна универсальная кнопка «Настроить»
+              return (
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="text-[11px]" style={{ color: 'var(--muted)' }}>
+                    ✨ Gemini CLI · {gInstalled ? 'нет API-ключа' : 'не установлен'}
+                  </span>
+                  <button onClick={(e) => { e.stopPropagation(); setGeminiFor(d); }}
+                    className="text-[10.5px] px-2 py-0.5 rounded-full"
+                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                    {gInstalled ? '🔑 Настроить' : '📥 Установить + ключ'}
+                  </button>
+                </div>
+              );
+            })()}
+
+            {/* Селектор preferred_agent — показываем только если хотя бы один провайдер готов */}
+            {role === 'claude' && d.online && (d.agent_logged_in || d.gemini_logged_in) && (
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <span className="text-[10.5px]" style={{ color: 'var(--muted)' }}>Default:</span>
+                {([
+                  { id: 'claude-code', label: '🤖 Claude', ready: d.agent_logged_in === true },
+                  { id: 'gemini-cli',  label: '✨ Gemini', ready: d.gemini_logged_in === true },
+                ] as const).map((opt) => {
+                  const active = (d.preferred_agent || 'claude-code') === opt.id;
+                  return (
+                    <button key={opt.id}
+                      onClick={(e) => { e.stopPropagation(); if (opt.ready) setPreferredAgent(d.id, opt.id); }}
+                      disabled={!opt.ready}
+                      className="text-[10.5px] px-2 py-0.5 rounded-full disabled:opacity-40"
+                      style={{
+                        background: active ? 'var(--accent)' : 'var(--surface-2)',
+                        color: active ? 'var(--bg)' : 'var(--fg-2)',
+                        border: active ? 'none' : '1px solid var(--border)',
+                      }}>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {d.root_path && (
               <div className="text-[11px] font-mono truncate mt-0.5" style={{ color: 'var(--muted)' }}>
                 корень: {d.root_path}
@@ -318,6 +387,15 @@ export default function Settings({ user, devices, theme, onThemeChange, onAddDev
           deviceId={loginFor.id}
           deviceName={loginFor.name}
           onClose={() => { setLoginFor(null); onReload(); }}
+        />
+      )}
+      {geminiFor && (
+        <GeminiSetupModal
+          deviceId={geminiFor.id}
+          deviceName={geminiFor.name}
+          alreadyInstalled={geminiFor.gemini_installed === true}
+          alreadyLoggedIn={geminiFor.gemini_logged_in === true}
+          onClose={() => { setGeminiFor(null); onReload(); }}
         />
       )}
     </div>

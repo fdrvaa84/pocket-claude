@@ -83,47 +83,79 @@ export function handleClaude(
   };
   send = sendAndBuffer;
 
-  const args: string[] = [
-    '-p', req.prompt,
-    '--output-format', 'stream-json',
-    '--verbose',
-  ];
-  if (req.model) args.push('--model', req.model);
-  if (req.resume_session_id) args.push('--resume', req.resume_session_id);
-  if (req.system_prompt) args.push('--system-prompt', req.system_prompt);
-  if (req.allowed_tools?.length) args.push('--allowedTools', req.allowed_tools.join(','));
-  if (req.disallowed_tools?.length) args.push('--disallowedTools', req.disallowed_tools.join(','));
-  // --tools accepts "" (disable ALL built-ins), "default" (all), or a comma list.
-  if (typeof req.built_in_tools === 'string') args.push('--tools', req.built_in_tools);
-  // MCP: proxy-mode setups need --strict-mcp-config to lock claude to our servers only.
-  if (req.strict_mcp_config) args.push('--strict-mcp-config');
-  if (req.mcp_servers && Object.keys(req.mcp_servers).length > 0) {
-    const cfg = buildMcpConfig(req.mcp_servers);
-    if (!cfg) {
-      const errm: ClaudeError = {
-        type: 'claude.error', correlation_id: req.id,
-        message: 'autmzr-command-rfs bundle not found on this device; run connect.sh again to install it',
-      };
-      send(errm); return;
-    }
-    args.push('--mcp-config', cfg);
-  }
-  // Resolve permission mode.
-  // claude CLI refuses to run with `bypassPermissions` under uid=0 (`--dangerously-skip-permissions
-  // cannot be used with root/sudo privileges`). Silently fall back to `acceptEdits` so root-agents
-  // (common on servers) still work.
-  let pmode = req.permission_mode || 'bypassPermissions';
-  const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
-  if (pmode === 'bypassPermissions' && isRoot) {
-    pmode = 'acceptEdits';
-    send({ type: 'claude.event', correlation_id: req.id, event: { type: 'stderr', text: '[autmzr-command] downgraded permission-mode to acceptEdits (running as root, bypass is disallowed by claude CLI)\n' } });
-  }
-  args.push('--permission-mode', pmode);
+  // ========== Выбор CLI-провайдера ==========
+  // Default = claude-code для обратной совместимости.
+  const provider = req.provider || 'claude-code';
+  let cliPath: string;
+  let args: string[];
 
-  const cliPath = process.env.PC_CLAUDE_PATH || 'claude';
+  if (provider === 'gemini-cli') {
+    // Gemini output-format 'stream-json' выдаёт JSON-lines совместимые с нашим
+    // парсером (type/subtype/session_id/result на outer level). Проверено на
+    // gemini 0.39.1.
+    cliPath = process.env.PC_GEMINI_PATH || 'gemini';
+    args = [
+      '-p', req.prompt,
+      '-o', 'stream-json',
+      '--skip-trust',              // наши workspaces trusted автоматически (инфра-решение)
+      '--approval-mode', 'yolo',   // auto-approve — без этого gemini заблокируется на first tool call
+    ];
+    if (req.model) args.push('-m', req.model);
+    if (req.resume_session_id) args.push('-r', req.resume_session_id);
+    // Gemini не знает --system-prompt, но принимает контекст через stdin при -p.
+    // MCP: gemini использует `gemini mcp add` вместо --mcp-config — нужно конфигурить
+    // OTBOF-процесс или через settings.json. Пока для Gemini proxy-mode НЕ поддерживаем —
+    // если задан req.mcp_servers, сообщим ошибкой что только для claude.
+    if (req.mcp_servers && Object.keys(req.mcp_servers).length > 0) {
+      send({
+        type: 'claude.event', correlation_id: req.id,
+        event: { type: 'stderr', text: '[autmzr-command] MCP proxy-mode пока не поддерживается для Gemini CLI. Отправляю без MCP.\n' },
+      });
+    }
+  } else {
+    // === Claude Code (default) ===
+    cliPath = process.env.PC_CLAUDE_PATH || 'claude';
+    args = [
+      '-p', req.prompt,
+      '--output-format', 'stream-json',
+      '--verbose',
+    ];
+    if (req.model) args.push('--model', req.model);
+    if (req.resume_session_id) args.push('--resume', req.resume_session_id);
+    if (req.system_prompt) args.push('--system-prompt', req.system_prompt);
+    if (req.allowed_tools?.length) args.push('--allowedTools', req.allowed_tools.join(','));
+    if (req.disallowed_tools?.length) args.push('--disallowedTools', req.disallowed_tools.join(','));
+    if (typeof req.built_in_tools === 'string') args.push('--tools', req.built_in_tools);
+    if (req.strict_mcp_config) args.push('--strict-mcp-config');
+    if (req.mcp_servers && Object.keys(req.mcp_servers).length > 0) {
+      const cfg = buildMcpConfig(req.mcp_servers);
+      if (!cfg) {
+        const errm: ClaudeError = {
+          type: 'claude.error', correlation_id: req.id,
+          message: 'autmzr-command-rfs bundle not found on this device; run connect.sh again to install it',
+        };
+        send(errm); return;
+      }
+      args.push('--mcp-config', cfg);
+    }
+    // claude CLI refuses to run with `bypassPermissions` under uid=0. Silently fall back.
+    let pmode = req.permission_mode || 'bypassPermissions';
+    const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+    if (pmode === 'bypassPermissions' && isRoot) {
+      pmode = 'acceptEdits';
+      send({ type: 'claude.event', correlation_id: req.id, event: { type: 'stderr', text: '[autmzr-command] downgraded permission-mode to acceptEdits (running as root, bypass is disallowed by claude CLI)\n' } });
+    }
+    args.push('--permission-mode', pmode);
+  }
+
   const proc = spawn(cliPath, args, {
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      // Gemini: нужен явный hint trust для non-interactive
+      ...(provider === 'gemini-cli' ? { GEMINI_CLI_TRUST_WORKSPACE: 'true' } : {}),
+    },
   });
 
   const timeoutMs = Math.min(req.timeout_ms ?? 1_800_000, 3_600_000);
@@ -167,7 +199,7 @@ export function handleClaude(
   proc.on('close', (code) => {
     clearTimeout(killer);
     if (code !== 0 && !lastResult) {
-      send({ type: 'claude.error', correlation_id: req.id, message: `claude exited with code ${code}` });
+      send({ type: 'claude.error', correlation_id: req.id, message: `${provider} exited with code ${code}` });
       return;
     }
     send({ type: 'claude.done', correlation_id: req.id, session_id: lastSessionId, result: lastResult });

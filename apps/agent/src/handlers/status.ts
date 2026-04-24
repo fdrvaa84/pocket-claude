@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { StatusRequest, StatusReply } from '@autmzr/command-protocol';
 
+export interface AgentInfo { installed: boolean; version?: string; logged_in: boolean }
+
 export async function handleStatus(req: StatusRequest): Promise<StatusReply> {
   const claude = await probeClaude();
   let disk = { free_bytes: 0, total_bytes: 0 };
@@ -63,6 +65,71 @@ function spawnClaudeVersion(cmd: string, args: string[]): Promise<{ installed: b
       clearTimeout(killer);
       if (code !== 0) return resolve({ installed: false });
       // bash -lc 'claude --version' печатает "1.2.8 (Claude Code)\n" или похожее
+      const m = out.match(/(\d+\.\d+\.\d+(?:[-\w.]*)?)/);
+      resolve({ installed: true, version: m ? m[1] : out.trim() });
+    });
+  });
+}
+
+/* ============================= GEMINI PROBE ============================= */
+
+/**
+ * Пробуем найти Gemini CLI и понять залогинен ли он.
+ *
+ * Gemini CLI (`@google/gemini-cli`) — binary `gemini`. Auth варианты:
+ *  1. GEMINI_API_KEY env — самый простой, проверяем.
+ *  2. ~/.gemini/settings.json с полем security.auth.selectedType (oauth-personal / vertex / gca)
+ *     + OAuth creds cache от Google (обычно в ~/.config/google-auth/ или в процессе).
+ *  3. GOOGLE_GENAI_USE_VERTEXAI / GOOGLE_GENAI_USE_GCA env.
+ *
+ * Для MVP считаем logged_in=true если:
+ *  - есть env GEMINI_API_KEY, ИЛИ
+ *  - settings.json содержит selectedType, ИЛИ
+ *  - setup через gcloud ADC (проверяем ~/.config/gcloud/application_default_credentials.json)
+ */
+export async function probeGemini(): Promise<AgentInfo> {
+  const home = homedir();
+
+  // Поиск признаков auth-состояния
+  let loggedIn = false;
+  if (process.env.GEMINI_API_KEY) loggedIn = true;
+  if (!loggedIn) {
+    try {
+      const settingsPath = join(home, '.gemini', 'settings.json');
+      if (existsSync(settingsPath)) {
+        const { readFileSync } = await import('node:fs');
+        const raw = readFileSync(settingsPath, 'utf8');
+        const parsed = JSON.parse(raw) as { security?: { auth?: { selectedType?: string } } };
+        if (parsed.security?.auth?.selectedType) loggedIn = true;
+      }
+    } catch {}
+  }
+  if (!loggedIn) {
+    loggedIn = existsSync(join(home, '.config', 'gcloud', 'application_default_credentials.json'));
+  }
+
+  // direct spawn
+  const direct = await spawnBinaryVersion(process.env.PC_GEMINI_PATH || 'gemini', ['--version']);
+  if (direct.installed) return { ...direct, logged_in: loggedIn };
+
+  // login-shell fallback (на случай если gemini в nvm/homebrew/etc пути)
+  const viaLogin = await spawnBinaryVersion('bash', ['-lc', 'gemini --version']);
+  if (viaLogin.installed) return { ...viaLogin, logged_in: loggedIn };
+
+  return { installed: false, logged_in: loggedIn };
+}
+
+/** Универсальная версия spawnClaudeVersion — просто читает числовую версию из stdout. */
+function spawnBinaryVersion(cmd: string, args: string[]): Promise<{ installed: boolean; version?: string }> {
+  return new Promise((resolve) => {
+    const proc = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    const killer = setTimeout(() => { try { proc.kill('SIGKILL'); } catch {} }, 5_000);
+    proc.stdout.on('data', (c) => { out += c.toString(); });
+    proc.on('error', () => { clearTimeout(killer); resolve({ installed: false }); });
+    proc.on('close', (code) => {
+      clearTimeout(killer);
+      if (code !== 0) return resolve({ installed: false });
       const m = out.match(/(\d+\.\d+\.\d+(?:[-\w.]*)?)/);
       resolve({ installed: true, version: m ? m[1] : out.trim() });
     });

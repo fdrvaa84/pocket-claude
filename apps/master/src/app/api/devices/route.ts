@@ -11,6 +11,7 @@ export async function GET() {
   const rows = await query<any>(
     `SELECT id, name, kind, hostname, os, arch, capabilities, last_online, last_version,
             agent_logged_in, agent_installed, agent_version, agent_kind,
+            gemini_logged_in, gemini_installed, gemini_version, preferred_agent,
             root_path, intent, created_at
      FROM pc.devices WHERE user_id = $1 ORDER BY created_at DESC`,
     [user.id],
@@ -23,14 +24,19 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { id, name, root_path, intent } = await req.json();
+  const { id, name, root_path, intent, preferred_agent } = await req.json();
+  // Валидация preferred_agent — только известные значения
+  const validPreferred = preferred_agent && ['claude-code', 'gemini-cli'].includes(preferred_agent)
+    ? preferred_agent
+    : null;
   await query(
     `UPDATE pc.devices SET
-       name      = COALESCE($1, name),
-       root_path = COALESCE($2, root_path),
-       intent    = COALESCE($3, intent)
-     WHERE id = $4 AND user_id = $5`,
-    [name ?? null, root_path ?? null, intent ? parseIntent(intent) : null, id, user.id],
+       name            = COALESCE($1, name),
+       root_path       = COALESCE($2, root_path),
+       intent          = COALESCE($3, intent),
+       preferred_agent = COALESCE($4, preferred_agent)
+     WHERE id = $5 AND user_id = $6`,
+    [name ?? null, root_path ?? null, intent ? parseIntent(intent) : null, validPreferred, id, user.id],
   );
   return NextResponse.json({ ok: true });
 }

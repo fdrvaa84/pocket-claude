@@ -8,7 +8,7 @@ import { PROTOCOL_VERSION } from '@autmzr/command-protocol';
 import { handleExec } from './handlers/exec.js';
 import { handleFsList, handleFsRead, handleFsWrite, handleFsMkdir, handleFsDelete } from './handlers/fs.js';
 import { handleClaude } from './handlers/claude.js';
-import { handleStatus, probeClaude } from './handlers/status.js';
+import { handleStatus, probeClaude, probeGemini } from './handlers/status.js';
 import { handlePtyOpen, handlePtyData, handlePtyResize, handlePtyClose, killAllPty } from './handlers/pty.js';
 import { jobList, jobRead, jobDelete, jobCleanup } from './job-buffer.js';
 import type { AgentConfig } from './config.js';
@@ -35,7 +35,9 @@ export function connect(cfg: AgentConfig): void {
 
   ws.on('open', async () => {
     log('connected');
-    const claude = await probeClaude();
+    const [claude, gemini] = await Promise.all([probeClaude(), probeGemini()]);
+    const capabilities: HelloMessage['capabilities'] = ['exec', 'claude', 'fs'];
+    if (gemini.installed) capabilities.push('gemini');
     const hello: HelloMessage = {
       type: 'hello',
       agent: 'autmzr-command-agent',
@@ -43,8 +45,9 @@ export function connect(cfg: AgentConfig): void {
       os: platform(),
       arch: arch(),
       hostname: hostname(),
-      capabilities: ['exec', 'claude', 'fs'],
+      capabilities,
       claude,
+      gemini,
     };
     send(ws, hello);
 

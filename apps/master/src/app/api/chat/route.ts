@@ -46,7 +46,8 @@ export async function POST(req: NextRequest) {
   const project = projectId ? await queryOne<any>(
     `SELECT p.id, p.name, p.path, p.device_id, p.claude_device_id, p.instructions,
             d.name as device_name, d.intent as device_intent, d.agent_logged_in as device_agent_logged_in,
-            cd.name as claude_device_name
+            d.preferred_agent as device_preferred_agent,
+            cd.name as claude_device_name, cd.preferred_agent as claude_device_preferred_agent
      FROM pc.projects p
      LEFT JOIN pc.devices d  ON d.id  = p.device_id
      LEFT JOIN pc.devices cd ON cd.id = p.claude_device_id
@@ -158,11 +159,18 @@ export async function POST(req: NextRequest) {
     cwd = '/tmp';
   }
 
+  // Выбор провайдера (claude-code | gemini-cli). Берём из preferred_agent того
+  // устройства которое реально будет крутить AI (cd в proxy-режиме, d иначе).
+  const preferredAgent: 'claude-code' | 'gemini-cli' =
+    (isProxy ? project!.claude_device_preferred_agent : project!.device_preferred_agent) === 'gemini-cli'
+      ? 'gemini-cli' : 'claude-code';
+
   const claudeReq: ClaudeRequest = {
     type: 'claude',
     id: requestId,
     cwd,
     prompt: message,
+    provider: preferredAgent,
     model,
     resume_session_id: claudeSessionId,
     system_prompt: systemPrompt,

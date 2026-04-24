@@ -49,8 +49,14 @@ export interface HelloMessage extends Envelope {
   os: string;
   arch: string;
   hostname: string;
-  capabilities: Array<'exec' | 'claude' | 'fs'>;
+  capabilities: Array<'exec' | 'claude' | 'fs' | 'gemini'>;
   claude: {
+    installed: boolean;
+    version?: string;
+    logged_in: boolean;
+  };
+  /** Опциональный блок — присутствует только если агент проверяет Gemini CLI (v >= 0.3) */
+  gemini?: {
     installed: boolean;
     version?: string;
     logged_in: boolean;
@@ -97,12 +103,17 @@ export interface ExecExit extends Envelope {
 export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
 export type Effort = 'low' | 'medium' | 'high';
 
+/** Какой CLI агент вызывать. Default = 'claude-code' для обратной совместимости. */
+export type AgentProvider = 'claude-code' | 'gemini-cli';
+
 export interface ClaudeRequest extends Envelope {
   type: 'claude';
   id: string;
   cwd: string;
   prompt: string;
-  model?: string; // 'sonnet' | 'opus' | 'haiku'
+  /** Провайдер агента. Default 'claude-code' — для уже задеплоенных агентов. */
+  provider?: AgentProvider;
+  model?: string; // 'sonnet' | 'opus' | 'haiku' | 'gemini-2.5-pro' | etc
   resume_session_id?: string | null;
   system_prompt?: string;
   allowed_tools?: string[];
@@ -110,9 +121,9 @@ export interface ClaudeRequest extends Envelope {
   built_in_tools?: string | null;   // value for --tools flag; pass "" to disable all built-ins
   strict_mcp_config?: boolean;      // --strict-mcp-config
   /**
-   * MCP-серверы, которые agent должен добавить claude CLI через --mcp-config.
-   * Используется в proxy-режиме: autmzr-command подставляет rfs-mcp-сервер,
-   * который роутит все fs/exec tool-вызовы обратно на fs-device.
+   * MCP-серверы, которые agent должен добавить CLI через --mcp-config (claude) или
+   * `gemini mcp add` (gemini). Используется в proxy-режиме: autmzr-command подставляет
+   * rfs-mcp-сервер, который роутит все fs/exec tool-вызовы обратно на fs-device.
    */
   mcp_servers?: Record<string, McpServerSpec>;
   permission_mode?: PermissionMode; // default 'bypassPermissions'
