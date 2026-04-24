@@ -226,43 +226,35 @@ input, textarea, select { font: inherit; color: inherit; }
 
 /* Voice-recording UI (ChatGPT-style) */
 
-/* Pulse вокруг Send-кнопки в rec-режиме (зелёный, не красный — теперь это «готово») */
-@keyframes voice-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(4, 120, 87, .35); }
-  70%  { box-shadow: 0 0 0 8px rgba(4, 120, 87, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(4, 120, 87, 0); }
-}
-.voice-pulse { animation: voice-pulse 1.6s infinite; }
-
 /* Лёгкое появление bar-режима */
 .voice-rec-bar {
   animation: fadeIn .18s ease-out both;
-  box-shadow: 0 0 0 3px rgba(4, 120, 87, .08);
 }
 
-/* Waveform — 14 баров, каждый растёт-сжимается по своему ритму.
-   Имитирует аудио-уровень без реального AudioContext (MVP). */
+/* Waveform — 36 тонких баров. Высота меняется псевдо-случайно через offset.
+   Цвет нейтральный --fg-2 (НЕ vibrant), как в ChatGPT — чтобы не отвлекало. */
 @keyframes voice-bar {
-  0%, 100% { transform: scaleY(0.3); }
-  20%      { transform: scaleY(1);   }
-  40%      { transform: scaleY(0.5); }
-  60%      { transform: scaleY(0.8); }
-  80%      { transform: scaleY(0.4); }
+  0%, 100% { transform: scaleY(0.15); }
+  25%      { transform: scaleY(0.95); }
+  50%      { transform: scaleY(0.40); }
+  75%      { transform: scaleY(0.75); }
 }
 .voice-waveform .voice-bar {
   display: inline-block;
-  width: 3px;
+  width: 2px;
   height: 100%;
-  background: var(--vibrant);
-  border-radius: 2px;
+  background: var(--fg-2);
+  border-radius: 1px;
   transform-origin: center;
-  animation: voice-bar 1s ease-in-out infinite;
+  animation: voice-bar 1.1s ease-in-out infinite;
+  opacity: .8;
 }
-/* Каждый второй и третий — со своим offset, чтобы выглядело псевдо-случайно */
-.voice-waveform .voice-bar:nth-child(2n)  { animation-duration: 0.85s; opacity: .85; }
-.voice-waveform .voice-bar:nth-child(3n)  { animation-duration: 1.15s; opacity: .7; }
-.voice-waveform .voice-bar:nth-child(5n)  { animation-duration: 0.7s;  opacity: .9; }
-.voice-waveform .voice-bar:nth-child(7n)  { animation-duration: 1.3s;  opacity: .65; }
+/* Псевдо-рандом через прайм-числа nth-child — у каждого свой ритм */
+.voice-waveform .voice-bar:nth-child(2n)  { animation-duration: 0.83s; opacity: .55; }
+.voice-waveform .voice-bar:nth-child(3n)  { animation-duration: 1.21s; opacity: .9;  }
+.voice-waveform .voice-bar:nth-child(5n)  { animation-duration: 0.67s; opacity: .7;  }
+.voice-waveform .voice-bar:nth-child(7n)  { animation-duration: 1.39s; opacity: .45; }
+.voice-waveform .voice-bar:nth-child(11n) { animation-duration: 0.95s; opacity: 1;   }
 
 /* safe-bottom/top: минимум 16px всегда, плюс device safe-area (home-indicator / notch).
    Без min-fallback Android и desktop-браузеры получали padding-bottom: 0, и композер

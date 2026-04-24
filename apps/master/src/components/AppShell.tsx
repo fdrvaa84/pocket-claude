@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import {
   Plus, Settings as SettingsIcon, Menu, X, ChevronRight, ChevronDown,
   FolderOpen, Files, TerminalSquare, MessageSquare,
-  Send, Loader2, ArrowLeft, Mic,
+  Send, Loader2, ArrowLeft, Mic, Check,
 } from 'lucide-react';
 import Markdown from './Markdown';
 import { COMMANDS, matchCommands, parseSlash, findCommand } from './slashCommands';
@@ -1039,35 +1039,37 @@ export default function AppShell({ user }: { user: User }) {
 
             {/* Input row — режим ChatGPT-voice или обычный композер */}
             {speech.listening ? (
-              /* === Voice recording mode (ChatGPT-style) === */
-              <div className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 md:py-2.5 rounded-[24px] md:rounded-xl voice-rec-bar"
-                style={{ background: 'var(--surface)', border: '1px solid var(--vibrant)' }}>
+              /* === Voice recording mode (ChatGPT-style) ===
+                 Иконки минимальные: тонкий stroke, без фона, нейтральный цвет.
+                 Никаких pulse / красных подложек — это раздражает. */
+              <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-2 md:py-2.5 rounded-[24px] md:rounded-xl voice-rec-bar"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)' }}>
                 {/* ✗ Cancel — discard transcript */}
                 <button type="button" onClick={cancelVoice}
-                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors"
-                  style={{ background: 'var(--surface-2)', color: 'var(--danger)' }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-black/5"
+                  style={{ color: 'var(--fg-2)' }}
                   aria-label="Отмена">
-                  <X size={18} />
+                  <X size={20} strokeWidth={1.6} />
                 </button>
 
-                {/* Waveform — 12 баров с псевдо-аудио-уровнем */}
-                <div className="flex-1 flex items-center justify-center gap-[3px] h-10 voice-waveform">
-                  {Array.from({ length: 14 }).map((_, i) => (
-                    <span key={i} className="voice-bar" style={{ animationDelay: `${i * 70}ms` }} />
+                {/* Waveform — много тонких баров с псевдо-аудио-уровнем */}
+                <div className="flex-1 flex items-center justify-center gap-[2px] h-10 voice-waveform overflow-hidden">
+                  {Array.from({ length: 36 }).map((_, i) => (
+                    <span key={i} className="voice-bar" style={{ animationDelay: `${(i * 53) % 1000}ms` }} />
                   ))}
                 </div>
 
                 {/* Timer */}
-                <span className="font-mono text-[13px] tabular-nums shrink-0" style={{ color: 'var(--muted)' }}>
+                <span className="font-mono text-[12.5px] tabular-nums shrink-0 px-1" style={{ color: 'var(--muted)' }}>
                   {formatVoiceTimer(voiceTimer)}
                 </span>
 
-                {/* ✓ Confirm — keep transcript */}
+                {/* ✓ Confirm — keep transcript. Тоже минимальная иконка. */}
                 <button type="button" onClick={confirmVoice}
-                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 voice-pulse"
-                  style={{ background: 'var(--vibrant)', color: 'var(--vibrant-fg)' }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors hover:bg-black/5"
+                  style={{ color: 'var(--fg)' }}
                   aria-label="Готово">
-                  <Send size={16} />
+                  <Check size={20} strokeWidth={1.8} />
                 </button>
               </div>
             ) : (
