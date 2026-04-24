@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, X, FolderOpen, FolderPlus, Loader2, ChevronRight } from 'lucide-react';
 import DeviceBrowser from './DeviceBrowser';
 import { effectiveIntent, type DeviceIntent } from '@/lib/device-intent';
+import { MODELS, DEFAULT_MODEL, type Provider } from '@/lib/models';
 
 interface Device {
   id: string; name: string; kind: string; online: boolean;
   root_path?: string | null;
   agent_logged_in?: boolean | null;
   intent?: DeviceIntent | null;
+  preferred_agent?: 'claude-code' | 'gemini-cli' | null;
 }
 interface Props {
   devices: Device[];
@@ -37,6 +39,7 @@ export default function ProjectCreateModal({ devices, onClose, onCreated }: Prop
   const [claudeDeviceId, setClaudeDeviceId] = useState<string | null>(null);
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
+  const [defaultModel, setDefaultModel] = useState<string | null>(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -44,6 +47,20 @@ export default function ProjectCreateModal({ devices, onClose, onCreated }: Prop
   const needsClaudeDevice = !!selectedDevice && effectiveIntent(selectedDevice) === 'fs-only';
   const claudeCandidates = devices.filter(d => d.id !== deviceId && d.online && effectiveIntent(d) === 'claude');
   const proxyOk = !needsClaudeDevice || !!claudeDeviceId;
+
+  // Провайдер = preferred_agent устройства которое будет крутить AI
+  // (claude-device в proxy-режиме, иначе — само устройство)
+  const runningDeviceId = needsClaudeDevice ? claudeDeviceId : deviceId;
+  const runningDevice = devices.find(d => d.id === runningDeviceId);
+  const provider: Provider = (runningDevice?.preferred_agent === 'gemini-cli') ? 'gemini-cli' : 'claude-code';
+  const availableModels = MODELS[provider];
+
+  // Автовыбор balanced-модели провайдера при смене провайдера
+  useEffect(() => {
+    if (!defaultModel || !availableModels.find(m => m.id === defaultModel)) {
+      setDefaultModel(DEFAULT_MODEL[provider]);
+    }
+  }, [provider]); // eslint-disable-line
 
   // Автовыбор первого claude-кандидата при смене device
   useEffect(() => {
@@ -71,6 +88,7 @@ export default function ProjectCreateModal({ devices, onClose, onCreated }: Prop
       body: JSON.stringify({
         name: basename(path), device_id: deviceId, path,
         claude_device_id: needsClaudeDevice ? claudeDeviceId : null,
+        default_model: defaultModel,
       }),
     });
     setBusy(false);
@@ -98,6 +116,7 @@ export default function ProjectCreateModal({ devices, onClose, onCreated }: Prop
       body: JSON.stringify({
         name: newName.trim(), device_id: deviceId, path: md.path,
         claude_device_id: needsClaudeDevice ? claudeDeviceId : null,
+        default_model: defaultModel,
       }),
     });
     setBusy(false);
@@ -280,6 +299,43 @@ export default function ProjectCreateModal({ devices, onClose, onCreated }: Prop
                 </div>
                 <ChevronRight size={16} style={{ color: 'var(--muted)' }} />
               </button>
+
+              {/* Селектор модели — для осознанного выбора «тяжёлая/лёгкая» под задачу */}
+              {proxyOk && (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  <div className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}>
+                    Модель по умолчанию ({provider === 'gemini-cli' ? 'Gemini' : 'Claude'})
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {availableModels.map(m => {
+                      const active = defaultModel === m.id;
+                      return (
+                        <button key={m.id} type="button"
+                          onClick={() => setDefaultModel(m.id)}
+                          className="flex flex-col items-start gap-0.5 px-2.5 py-2 rounded-lg text-left"
+                          style={{
+                            minHeight: 62,
+                            border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                            background: active ? 'var(--accent-light)' : 'var(--surface-2)',
+                          }}>
+                          <div className="flex items-center gap-1 w-full">
+                            <span style={{ fontSize: 14 }}>{m.icon}</span>
+                            <span className="text-[12.5px] font-medium truncate flex-1">{m.label}</span>
+                          </div>
+                          <div className="text-[10px] font-mono truncate w-full" style={{ color: 'var(--muted)' }}>
+                            {m.tags[0]}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {defaultModel && (
+                    <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
+                      {availableModels.find(m => m.id === defaultModel)?.hint}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 

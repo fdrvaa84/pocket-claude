@@ -6,9 +6,9 @@ export async function GET() {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const rows = await query<any>(
-    `SELECT p.id, p.name, p.path, p.instructions, p.device_id, p.claude_device_id,
-            d.name as device_name, d.kind as device_kind,
-            cd.name as claude_device_name,
+    `SELECT p.id, p.name, p.path, p.instructions, p.device_id, p.claude_device_id, p.default_model,
+            d.name as device_name, d.kind as device_kind, d.preferred_agent as device_preferred_agent,
+            cd.name as claude_device_name, cd.preferred_agent as claude_device_preferred_agent,
             (SELECT COUNT(*) FROM pc.sessions s WHERE s.project_id = p.id) as chat_count
      FROM pc.projects p
      LEFT JOIN pc.devices d  ON d.id  = p.device_id
@@ -22,7 +22,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { name, path = null, device_id = null, claude_device_id = null, instructions = '' } = await req.json();
+  const { name, path = null, device_id = null, claude_device_id = null, instructions = '', default_model = null } = await req.json();
   if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
   if (device_id) {
     const d = await queryOne<{ id: string }>(
@@ -40,9 +40,9 @@ export async function POST(req: NextRequest) {
     }
   }
   const rows = await query<{ id: string }>(
-    `INSERT INTO pc.projects (user_id, device_id, claude_device_id, name, path, instructions)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [user.id, device_id, claude_device_id, String(name).trim(), path, instructions],
+    `INSERT INTO pc.projects (user_id, device_id, claude_device_id, name, path, instructions, default_model)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [user.id, device_id, claude_device_id, String(name).trim(), path, instructions, default_model],
   );
   return NextResponse.json({ id: rows[0].id });
 }
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { id, name, path, device_id, claude_device_id, instructions } = await req.json();
+  const { id, name, path, device_id, claude_device_id, instructions, default_model } = await req.json();
   await query(
     `UPDATE pc.projects SET
        name = COALESCE($1, name),
@@ -58,9 +58,10 @@ export async function PUT(req: NextRequest) {
        device_id = COALESCE($3, device_id),
        claude_device_id = $4,
        instructions = COALESCE($5, instructions),
+       default_model = COALESCE($6, default_model),
        updated_at = NOW()
-     WHERE id = $6 AND user_id = $7`,
-    [name, path, device_id, claude_device_id ?? null, instructions, id, user.id],
+     WHERE id = $7 AND user_id = $8`,
+    [name, path, device_id, claude_device_id ?? null, instructions, default_model, id, user.id],
   );
   return NextResponse.json({ ok: true });
 }

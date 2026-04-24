@@ -10,6 +10,7 @@ import type {
 import { processClaudeMessage, startJob } from '@/lib/job-tracker';
 import { issueRfsToken } from '@/lib/rfs-tokens';
 import { effectiveIntent } from '@/lib/device-intent';
+import { resolveModel, type Provider } from '@/lib/models';
 
 /**
  * В proxy-режиме claude запускается в пустом /tmp на worker'е — там нет CLAUDE.md проекта.
@@ -38,13 +39,13 @@ export async function POST(req: NextRequest) {
   const user = await getAuthUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
 
-  const { message, sessionId, projectId, model = 'sonnet',
+  const { message, sessionId, projectId, model: requestedModel,
           permissionMode = 'bypassPermissions', effort = 'medium' } = await req.json();
   if (!message || typeof message !== 'string') return new Response('message required', { status: 400 });
 
   // Загружаем проект и устройство — включая intent/agent_logged_in для выбора режима.
   const project = projectId ? await queryOne<any>(
-    `SELECT p.id, p.name, p.path, p.device_id, p.claude_device_id, p.instructions,
+    `SELECT p.id, p.name, p.path, p.device_id, p.claude_device_id, p.instructions, p.default_model as project_default_model,
             d.name as device_name, d.intent as device_intent, d.agent_logged_in as device_agent_logged_in,
             d.preferred_agent as device_preferred_agent,
             cd.name as claude_device_name, cd.preferred_agent as claude_device_preferred_agent
@@ -85,21 +86,51 @@ export async function POST(req: NextRequest) {
 
   const deviceId = claudeDeviceId; // куда уедет claude-запрос
 
-  // Session
+  // Выбор провайдера (claude-code | gemini-cli). Берём из preferred_agent того
+  // устройства которое реально будет крутить AI (cd в proxy-режиме, d иначе).
+  const provider: Provider =
+    (isProxy ? project!.claude_device_preferred_agent : project!.device_preferred_agent) === 'gemini-cli'
+      ? 'gemini-cli' : 'claude-code';
+
+  // Session: загружаем model из БД, либо создаём с наследованием.
+  // Fallback-цепочка для итогового model:
+  //   1. requested (явный pick в этом запросе — «только для этого сообщения»)
+  //   2. session.model (ранее выбранная для чата)
+  //   3. project.default_model (дефолт проекта)
+  //   4. DEFAULT_MODEL[provider] (hardcoded fallback)
   let sid = sessionId as string | undefined;
   let claudeSessionId: string | null = null;
+  let sessionModel: string | null = null;
   if (sid) {
-    const s = await queryOne<{ id: string; claude_session_id: string | null }>(
-      `SELECT id, claude_session_id FROM pc.sessions WHERE id = $1 AND user_id = $2`, [sid, user.id]);
+    const s = await queryOne<{ id: string; claude_session_id: string | null; model: string | null }>(
+      `SELECT id, claude_session_id, model FROM pc.sessions WHERE id = $1 AND user_id = $2`, [sid, user.id]);
     if (!s) return new Response('session not found', { status: 404 });
     claudeSessionId = s.claude_session_id;
+    sessionModel = s.model;
   } else {
     const title = message.slice(0, 60) + (message.length > 60 ? '...' : '');
+    // Если юзер явно указал модель на первом сообщении — сохраняем её. Иначе
+    // копируем project.default_model. Если и его нет — оставляем NULL, чтобы
+    // следующий запрос снова пошёл по fallback-цепочке (наследование от проекта).
+    const initialModel = requestedModel || project?.project_default_model || null;
     const rows = await query<{ id: string }>(
-      `INSERT INTO pc.sessions (user_id, project_id, title, model) VALUES ($1, $2, $3, $4) RETURNING id`,
-      [user.id, projectId || null, title, model],
+      `INSERT INTO pc.sessions (user_id, project_id, title, model)
+       VALUES ($1, $2, $3, COALESCE($4, 'sonnet')) RETURNING id`,
+      [user.id, projectId || null, title, initialModel],
     );
     sid = rows[0].id;
+    sessionModel = initialModel;
+  }
+
+  // Итоговая модель для этого запроса
+  const model = resolveModel(provider, requestedModel || sessionModel, project?.project_default_model);
+
+  // Если юзер явно переключил модель в composer-пилюле — персистим выбор в сессию,
+  // чтобы следующий запрос в этот чат шёл на той же модели (иначе бы он снова
+  // откатился на project.default_model, что выглядит как глюк в UI).
+  if (requestedModel && requestedModel !== sessionModel) {
+    await query(`UPDATE pc.sessions SET model = $1 WHERE id = $2 AND user_id = $3`,
+      [model, sid, user.id]);
   }
 
   await query(`INSERT INTO pc.messages (session_id, role, content) VALUES ($1, 'user', $2)`, [sid, message]);
@@ -159,18 +190,12 @@ export async function POST(req: NextRequest) {
     cwd = '/tmp';
   }
 
-  // Выбор провайдера (claude-code | gemini-cli). Берём из preferred_agent того
-  // устройства которое реально будет крутить AI (cd в proxy-режиме, d иначе).
-  const preferredAgent: 'claude-code' | 'gemini-cli' =
-    (isProxy ? project!.claude_device_preferred_agent : project!.device_preferred_agent) === 'gemini-cli'
-      ? 'gemini-cli' : 'claude-code';
-
   const claudeReq: ClaudeRequest = {
     type: 'claude',
     id: requestId,
     cwd,
     prompt: message,
-    provider: preferredAgent,
+    provider,
     model,
     resume_session_id: claudeSessionId,
     system_prompt: systemPrompt,

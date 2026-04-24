@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import Markdown from './Markdown';
 import { COMMANDS, matchCommands, parseSlash, findCommand } from './slashCommands';
-import { ModePill, ModelEffortPill, MODELS, MODES, EFFORTS, type ModelValue, type EffortValue, type ModeValue } from './Controls';
+import { ModePill, ModelEffortPill, MODELS, MODES, EFFORTS, normalizeModel, MODEL_CATALOG, DEFAULT_MODEL, type ModelValue, type EffortValue, type ModeValue, type Provider } from './Controls';
 import { effectiveIntent, type DeviceIntent } from '@/lib/device-intent';
 import { useSpeechRecognition } from '@/lib/useSpeechRecognition';
 import MobileTabBar, { type MobileTab } from './MobileTabBar';
@@ -44,8 +44,12 @@ interface Device {
 }
 interface Project {
   id: string; name: string; path: string | null; device_id: string | null;
+  claude_device_id?: string | null;
   device_name: string | null; device_kind: string | null;
+  device_preferred_agent?: 'claude-code' | 'gemini-cli' | null;
+  claude_device_preferred_agent?: 'claude-code' | 'gemini-cli' | null;
   instructions: string; chat_count: number;
+  default_model?: string | null;
 }
 interface Session { id: string; title: string; project_id: string | null; updated_at: string; claude_session_id: string | null }
 interface Message { id?: string; role: 'user' | 'assistant' | 'system'; content: string; tool_events?: any[] }
@@ -148,7 +152,7 @@ export default function AppShell({ user }: { user: User }) {
   const [openFile, setOpenFile] = useState<string | null>(null);
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
-  const [model, setModel] = useState<ModelValue>('claude-sonnet-4-6');
+  const [model, setModel] = useState<ModelValue>('sonnet');
   const [permissionMode, setPermissionMode] = useState<ModeValue>('bypassPermissions');
   const [effort, setEffort] = useState<EffortValue>('medium');
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
@@ -166,7 +170,8 @@ export default function AppShell({ user }: { user: User }) {
 
   useEffect(() => {
     try {
-      const m = localStorage.getItem('pc_model'); if (m) setModel(m as ModelValue);
+      const m = localStorage.getItem('pc_model');
+      if (m) setModel(normalizeModel(m) as ModelValue); // legacy-значения вроде 'claude-sonnet-4-6' → 'sonnet'
       const pm = localStorage.getItem('pc_pmode'); if (pm) setPermissionMode(pm as ModeValue);
       const ef = localStorage.getItem('pc_effort'); if (ef) setEffort(ef as EffortValue);
     } catch {}
@@ -411,6 +416,30 @@ export default function AppShell({ user }: { user: User }) {
 
   const activeProject = projects.find(p => p.id === activeProjectId);
   const activeDevice = activeProject ? devices.find(d => d.id === activeProject.device_id) : null;
+
+  // Provider активного проекта — берём preferred_agent того устройства которое
+  // реально будет крутить AI (claude_device в proxy-режиме, иначе — само).
+  const activeProvider: Provider = (() => {
+    if (!activeProject) return 'claude-code';
+    const claudeDev = activeProject.claude_device_id
+      ? devices.find(d => d.id === activeProject.claude_device_id)
+      : null;
+    const runningDevice = claudeDev || activeDevice;
+    return runningDevice?.preferred_agent === 'gemini-cli' ? 'gemini-cli' : 'claude-code';
+  })();
+
+  // Sync model при смене активного проекта: если текущая model не валидна для
+  // провайдера проекта — переключить на project.default_model (или провайдерский
+  // default). Это предотвращает отправку 'sonnet' в gemini-cli (CLI бы упал).
+  useEffect(() => {
+    if (!activeProject) return;
+    const catalog = MODEL_CATALOG[activeProvider];
+    const normalized = normalizeModel(model);
+    if (!catalog.find(m => m.id === normalized)) {
+      setModel((activeProject.default_model || DEFAULT_MODEL[activeProvider]) as ModelValue);
+    }
+  }, [activeProjectId, activeProvider]); // eslint-disable-line
+
   const sessionsByProject = sessions.reduce((acc, s) => {
     const k = s.project_id || '__none__'; (acc[k] = acc[k] || []).push(s); return acc;
   }, {} as Record<string, Session[]>);
@@ -795,7 +824,7 @@ export default function AppShell({ user }: { user: User }) {
               {/* Модель в крошках на мобиле */}
               {activeProjectId && (
                 <span className="md:hidden text-[11px]" style={{ color: 'var(--muted)' }}>
-                  · {(MODELS.find(m => m.value === model)?.label || 'Sonnet').split(' ')[0].toLowerCase()}
+                  · {(MODEL_CATALOG[activeProvider].find(m => m.id === normalizeModel(model))?.label || 'Sonnet').toLowerCase()}
                 </span>
               )}
             </div>
@@ -910,7 +939,7 @@ export default function AppShell({ user }: { user: User }) {
                         { k: 'Устройств', v: `${onlineCount}/${devices.length || 0}`, sub: 'online' },
                         { k: 'Проектов', v: projects.length.toString(), sub: 'на устройствах' },
                         { k: 'Чатов', v: sessions.length.toString(), sub: sessions.length > 0 ? 'всего' : 'пока пусто' },
-                        { k: 'Модель', v: MODELS.find(m => m.value === model)?.label || model, sub: `effort: ${effort}` },
+                        { k: 'Модель', v: MODEL_CATALOG[activeProvider].find(m => m.id === normalizeModel(model))?.label || model, sub: `effort: ${effort}` },
                       ].map((c, i) => (
                         <div key={i} className="px-4 py-3"
                           style={{
@@ -1274,7 +1303,7 @@ export default function AppShell({ user }: { user: User }) {
             {/* Pills row — desktop only */}
             <div className="hidden md:flex items-center gap-1.5 mt-2 flex-wrap">
               <ModePill value={permissionMode} onChange={setPermissionMode} />
-              <ModelEffortPill model={model} effort={effort} onChange={(m, e) => { setModel(m); setEffort(e); }} />
+              <ModelEffortPill model={model} effort={effort} provider={activeProvider} onChange={(m, e) => { setModel(m); setEffort(e); }} />
               <div className="ml-auto font-mono text-[10.5px] flex items-center gap-2" style={{ color: 'var(--muted)' }}>
                 <span className="kbd">/</span>commands
                 <span style={{ color: 'var(--border-strong)' }}>·</span>
@@ -1396,6 +1425,7 @@ export default function AppShell({ user }: { user: User }) {
         onModelChange={setModel}
         effort={effort}
         onEffortChange={setEffort}
+        provider={activeProvider}
         onInsertCommand={(text) => {
           setInput(text);
           setSlashOpen(false);

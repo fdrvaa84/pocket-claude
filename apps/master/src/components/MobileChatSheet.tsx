@@ -6,7 +6,7 @@
  * Открывается тапом по [+] рядом с textarea или по pill «Sonnet 4.6 · Bypass» под композером.
  */
 import { useEffect, useState } from 'react';
-import { MODELS, MODES, EFFORTS, type ModelValue, type EffortValue, type ModeValue } from './Controls';
+import { MODES, EFFORTS, MODEL_CATALOG, normalizeModel, type ModelValue, type EffortValue, type ModeValue, type Provider } from './Controls';
 import { COMMANDS } from './slashCommands';
 
 interface Props {
@@ -18,6 +18,8 @@ interface Props {
   onModelChange: (m: ModelValue) => void;
   effort: EffortValue;
   onEffortChange: (e: EffortValue) => void;
+  /** Provider активного проекта — фильтрует список моделей. По умолчанию claude-code. */
+  provider?: Provider;
   onOpenFiles?: () => void;
   onOpenTerminal?: () => void;
   /** Вставить команду в input композера (и закрыть шторку). Юзер сам жмёт Send. */
@@ -29,8 +31,11 @@ export default function MobileChatSheet({
   mode, onModeChange,
   model, onModelChange,
   effort, onEffortChange,
+  provider = 'claude-code',
   onOpenFiles, onOpenTerminal, onInsertCommand,
 }: Props) {
+  const MODELS_FOR_PROVIDER = MODEL_CATALOG[provider];
+  const normalizedModel = normalizeModel(model);
   const [commandsOpen, setCommandsOpen] = useState(false);
   // При закрытии всей шторки — схлопываем внутренний раскрытый список команд
   useEffect(() => { if (!open) setCommandsOpen(false); }, [open]);
@@ -104,27 +109,24 @@ export default function MobileChatSheet({
 
           {/* Model */}
           <div className="font-mono text-[11px] uppercase tracking-[0.12em] pt-5 pb-2 px-1"
-            style={{ color: 'var(--muted)' }}>Модель</div>
+            style={{ color: 'var(--muted)' }}>
+            Модель · {provider === 'gemini-cli' ? 'Gemini' : 'Claude'}
+          </div>
           <div className="rounded-[14px] overflow-hidden"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            {MODELS.map((m, i) => {
-              const on = model === m.value;
+            {MODELS_FOR_PROVIDER.map((m, i) => {
+              const on = normalizedModel === m.id;
               return (
-                <button key={m.value} type="button"
-                  onClick={() => onModelChange(m.value)}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-[15px]"
-                  style={{ borderBottom: i < MODELS.length - 1 ? '1px solid var(--border)' : '0' }}>
-                  <span className="w-6 text-center text-[16px] opacity-85">◈</span>
-                  <span className="flex-1">
-                    {m.label}
-                    {m.badge && (
-                      <span className="ml-1.5 font-mono text-[11px] px-1.5 py-0.5 rounded"
-                        style={{ background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)' }}>
-                        {m.badge}
-                      </span>
-                    )}
+                <button key={m.id} type="button"
+                  onClick={() => onModelChange(m.id)}
+                  className="w-full flex items-start gap-3 px-4 py-3.5 text-left text-[15px]"
+                  style={{ borderBottom: i < MODELS_FOR_PROVIDER.length - 1 ? '1px solid var(--border)' : '0' }}>
+                  <span className="w-6 text-center text-[16px] opacity-85">{m.icon}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block">{m.label}</span>
+                    <span className="block text-[12px] mt-0.5" style={{ color: 'var(--muted)' }}>{m.hint}</span>
                   </span>
-                  {on && <span className="font-semibold" style={{ color: 'var(--accent)' }}>✓</span>}
+                  {on && <span className="font-semibold mt-0.5" style={{ color: 'var(--accent)' }}>✓</span>}
                 </button>
               );
             })}

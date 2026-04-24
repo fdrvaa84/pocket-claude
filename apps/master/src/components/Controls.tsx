@@ -1,17 +1,29 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { MODELS as MODEL_CATALOG, DEFAULT_MODEL, type Provider, isValidModel } from '@/lib/models';
 
 // ---------------- Data ----------------
+//
+// Каталог моделей теперь живёт в `@/lib/models` и делится по провайдерам
+// (claude-code / gemini-cli). Здесь только UI-примитивы (pills/popovers)
+// и backward-compat легаси-экспортов.
 
-interface ModelSpec { value: string; label: string; badge?: string }
+/** Legacy shim — оставляем для строк localStorage с версионными именами
+ *  (например 'claude-sonnet-4-6') и для UI, не знающих про провайдера.
+ *  Нормализуется в алиасы при резолве.
+ */
+const LEGACY_MAP: Record<string, string> = {
+  'claude-opus-4-7': 'opus',
+  'claude-opus-4-7[1m]': 'opus',
+  'claude-sonnet-4-6': 'sonnet',
+  'claude-haiku-4-5': 'haiku',
+};
 
-export const MODELS: ModelSpec[] = [
-  { value: 'claude-opus-4-7',      label: 'Opus 4.7' },
-  { value: 'claude-opus-4-7[1m]',  label: 'Opus 4.7', badge: '1M' },
-  { value: 'claude-sonnet-4-6',    label: 'Sonnet 4.6' },
-  { value: 'claude-haiku-4-5',     label: 'Haiku 4.5' },
-];
+/** Нормализовать legacy-значение модели в каноничный alias. */
+export function normalizeModel(value: string): string {
+  return LEGACY_MAP[value] || value;
+}
 
 export const EFFORTS = [
   { value: 'low',        label: 'Low' },
@@ -32,6 +44,10 @@ export const MODES = [
 export type ModelValue = string;
 export type EffortValue = typeof EFFORTS[number]['value'];
 export type ModeValue = typeof MODES[number]['value'];
+
+/** Старый плоский список — показывает все клод-модели. Используется в местах
+ *  где ещё не прокинут provider (TODO: мигрировать). */
+export const MODELS = MODEL_CATALOG['claude-code'].map(m => ({ value: m.id, label: m.label }));
 
 // ---------------- Popover primitive ----------------
 
@@ -116,23 +132,37 @@ export function ModePill({ value, onChange }: { value: ModeValue; onChange: (v: 
 
 // ---------------- Model + Effort pill ----------------
 
+/**
+ * Pill для выбора модели и effort. Провайдер-aware: показывает список моделей
+ * из каталога `@/lib/models` для активного провайдера (по проекту).
+ *
+ * Если `provider` не задан — fallback на claude-code (например, когда чат ещё
+ * не привязан к проекту).
+ */
 export function ModelEffortPill({
-  model, effort, onChange,
+  model, effort, onChange, provider = 'claude-code',
 }: {
   model: ModelValue;
   effort: EffortValue;
   onChange: (m: ModelValue, e: EffortValue) => void;
+  provider?: Provider;
 }) {
   const { open, setOpen, ref } = usePopover();
-  const curModel = MODELS.find(m => m.value === model) || MODELS[0];
+  const modelsForProvider = MODEL_CATALOG[provider];
+
+  // Если текущая модель не валидна для провайдера — показываем fallback, но
+  // НЕ меняем state тут (AppShell отвечает за миграцию при смене проекта).
+  const normalized = normalizeModel(model);
+  const curModel = modelsForProvider.find(m => m.id === normalized)
+                || modelsForProvider.find(m => m.id === DEFAULT_MODEL[provider])!;
   const curEffort = EFFORTS.find(e => e.value === effort) || EFFORTS[1];
 
   function onKey(e: KeyboardEvent) {
     if (!open) return;
     const n = Number(e.key);
-    if (n >= 1 && n <= MODELS.length) {
+    if (n >= 1 && n <= modelsForProvider.length) {
       e.preventDefault();
-      onChange(MODELS[n - 1].value, effort);
+      onChange(modelsForProvider[n - 1].id, effort);
     }
     if (e.key === 'Escape') setOpen(false);
   }
@@ -140,37 +170,41 @@ export function ModelEffortPill({
     if (open) { window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }
   }); // eslint-disable-line
 
+  const providerLabel = provider === 'gemini-cli' ? 'Gemini' : 'Claude';
+
   return (
     <div className="relative" ref={ref}>
       <button type="button" onClick={() => setOpen(!open)}
         className="font-mono px-2.5 py-1 rounded-md text-[11.5px] inline-flex items-center gap-1"
         style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--fg)' }}>
-        <span style={{ opacity: .55, fontWeight: 400 }}>model=</span>
-        <span style={{ fontWeight: 500 }}>{curModel.label}{curModel.badge ? ` ${curModel.badge}` : ''}</span>
+        <span style={{ fontSize: 13 }}>{curModel.icon}</span>
+        <span style={{ fontWeight: 500 }}>{curModel.label}</span>
         <span style={{ opacity: .35 }}>·</span>
-        <span style={{ opacity: .55, fontWeight: 400 }}>effort=</span>
-        <span style={{ fontWeight: 500 }}>{curEffort.label.toLowerCase()}</span>
+        <span style={{ opacity: .55, fontWeight: 400 }}>{curEffort.label.toLowerCase()}</span>
       </button>
 
       {open && (
-        <div className="absolute bottom-full mb-2 left-0 rounded-2xl overflow-hidden min-w-[280px] z-20 p-1.5"
+        <div className="absolute bottom-full mb-2 left-0 rounded-2xl overflow-hidden min-w-[300px] z-20 p-1.5"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,.14)' }}>
 
           {/* Models */}
           <div className="flex items-center justify-between px-2 py-1.5">
-            <div className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}>Models</div>
+            <div className="text-[11px] uppercase tracking-wider" style={{ color: 'var(--muted)' }}>
+              Модель · {providerLabel}
+            </div>
             <div className="flex gap-1"><Kbd>⇧</Kbd><Kbd>⌘</Kbd><Kbd>I</Kbd></div>
           </div>
-          {MODELS.map((m, i) => (
-            <button key={m.value}
-              onClick={() => onChange(m.value, effort)}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-left"
-              style={{ background: model === m.value ? 'var(--accent-light)' : 'transparent' }}>
-              <span className="flex-1 flex items-center gap-1.5">
-                <span>{m.label}</span>
-                {m.badge && <span className="text-[10px]" style={{ color: 'var(--muted)' }}>{m.badge}</span>}
+          {modelsForProvider.map((m, i) => (
+            <button key={m.id}
+              onClick={() => onChange(m.id, effort)}
+              className="w-full flex items-start gap-2 px-2 py-2 rounded-lg text-sm text-left"
+              style={{ background: normalized === m.id ? 'var(--accent-light)' : 'transparent' }}>
+              <span style={{ fontSize: 14, lineHeight: 1.2 }}>{m.icon}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] font-medium">{m.label}</span>
+                <span className="block text-[10.5px]" style={{ color: 'var(--muted)' }}>{m.hint}</span>
               </span>
-              {model === m.value && <span>✓</span>}
+              {normalized === m.id && <span>✓</span>}
               <span className="text-[10.5px]" style={{ color: 'var(--muted)' }}>{i + 1}</span>
             </button>
           ))}
@@ -206,3 +240,7 @@ function Kbd({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
+
+// Re-export для других файлов которые хотят провайдер-aware каталог
+export { MODEL_CATALOG, DEFAULT_MODEL, isValidModel };
+export type { Provider };
