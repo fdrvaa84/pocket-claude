@@ -363,7 +363,7 @@ export default function AppShell({ user }: { user: User }) {
           return m;
         });
       } else {
-        setMessages((m) => { const c = [...m]; c[c.length - 1] = { role: 'assistant', content: `❌ ${e.message || 'Error'}` }; return c; });
+        setMessages((m) => { const c = [...m]; c[c.length - 1] = { role: 'assistant', content: `❌ ${e.message || 'Ошибка'}` }; return c; });
       }
     } finally { setSending(false); }
   }, [sending, activeProjectId, activeSessionId, model, permissionMode, effort, handleSlash]);
@@ -569,7 +569,7 @@ export default function AppShell({ user }: { user: User }) {
         <div className="flex-1 overflow-y-auto px-1.5 py-2">
           {/* Projects section */}
           <div className="flex items-center justify-between px-2 pt-2 pb-1.5">
-            <div className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--muted)' }}>projects</div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--muted)' }}>проекты</div>
             <button onClick={() => setShowAddProject(true)}
               className="w-5 h-5 rounded flex items-center justify-center text-[14px] hover:bg-[var(--surface-2)]"
               style={{ color: 'var(--muted)' }} title="Новый проект">
@@ -652,21 +652,10 @@ export default function AppShell({ user }: { user: User }) {
             );
           })}
 
-          {/* Tools section */}
-          <div className="font-mono text-[10px] uppercase tracking-[0.12em] px-2 pt-4 pb-1.5" style={{ color: 'var(--muted)' }}>tools</div>
-          <button onClick={() => setShowSettings(true)}
-            className="w-full flex items-center gap-2 px-2 py-[5px] rounded-md text-[12.5px] hover:bg-[var(--surface-2)]"
-            style={{ color: 'var(--fg-2)' }}>
-            <SettingsIcon size={12} style={{ color: 'var(--muted)' }} />
-            <span className="flex-1 text-left">Settings</span>
-            <span className="font-mono text-[9.5px] px-1.5 py-px rounded"
-              style={{ background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)' }}>⌘,</span>
-          </button>
-
           {/* Devices section — split by role */}
           <div className="flex items-center justify-between px-2 pt-4 pb-1.5">
             <div className="font-mono text-[10px] uppercase tracking-[0.12em]" style={{ color: 'var(--muted)' }}>
-              devices <span className="ml-1" style={{ color: 'var(--border-strong)' }}>·</span> <span style={{ color: 'var(--fg-2)' }}>{onlineCount}/{devices.length}</span>
+              устройства <span className="ml-1" style={{ color: 'var(--border-strong)' }}>·</span> <span style={{ color: 'var(--fg-2)' }}>{onlineCount}/{devices.length}</span>
             </div>
             <button onClick={() => setShowAddDevice(true)}
               className="w-5 h-5 rounded flex items-center justify-center text-[14px] hover:bg-[var(--surface-2)]"
@@ -724,9 +713,14 @@ export default function AppShell({ user }: { user: User }) {
           })()}
         </div>
 
-        {/* User block */}
-        <div className="flex items-center gap-2.5 px-3 py-3" style={{ borderTop: '1px solid var(--border)' }}>
-          <div className="w-6 h-6 rounded-full flex items-center justify-center font-mono text-[11px] font-semibold shrink-0"
+        {/* User block — единственная точка входа в Settings (Invites/Theme/Account+Logout).
+            Тап → открывает Settings-модалку. */}
+        <button onClick={() => setShowSettings(true)}
+          className="flex items-center gap-2.5 px-3 py-3 w-full text-left hover:bg-[var(--surface-2)] transition-colors"
+          style={{ borderTop: '1px solid var(--border)' }}
+          title="Профиль и настройки"
+        >
+          <div className="w-7 h-7 rounded-full flex items-center justify-center font-mono text-[12px] font-semibold shrink-0"
             style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
             {(user.name || user.email)[0].toUpperCase()}
           </div>
@@ -734,7 +728,7 @@ export default function AppShell({ user }: { user: User }) {
             <div className="text-[12.5px] truncate leading-tight">{user.name || user.email.split('@')[0]}</div>
             <div className="font-mono text-[10.5px] truncate" style={{ color: 'var(--muted)' }}>{user.email}</div>
           </div>
-        </div>
+        </button>
       </aside>
 
       {/* === Mobile non-home tab — рендерим вместо main + всего остального === */}
@@ -847,7 +841,7 @@ export default function AppShell({ user }: { user: User }) {
                       permissionMode === 'plan' ? '#7c8ef0' :
                       'var(--muted)',
                   }} />
-                <span>mode</span>
+                <span>режим</span>
               </button>
             )}
             {activeProjectId && (
@@ -858,16 +852,8 @@ export default function AppShell({ user }: { user: User }) {
                 <span className="hidden md:inline text-[9.5px] px-1 py-px rounded" style={{ background: 'rgba(255,255,255,.14)' }}>⌘N</span>
               </button>
             )}
-            {/* Profile avatar — открывает Settings (Invites / Theme / Account + Logout) */}
-            <button
-              onClick={() => setShowSettings(true)}
-              className="inline-flex w-9 h-9 rounded-full items-center justify-center font-semibold text-[13px] shrink-0"
-              style={{ background: 'var(--accent)', color: 'var(--bg)' }}
-              aria-label="Профиль и настройки"
-              title={user.name || user.email}
-            >
-              {(user.name || user.email)[0].toUpperCase()}
-            </button>
+            {/* Profile avatar переехал в sidebar (desktop) и bottom-tab-bar (mobile).
+                В topbar больше нет — единая точка входа в Settings/Logout. */}
             <button onClick={() => setRightOpen(!rightOpen)}
               className="hidden md:inline-flex font-mono items-center gap-1 px-2.5 py-1 rounded-md text-[12px]"
               style={{ background: 'var(--surface)', color: 'var(--fg)', border: '1px solid var(--border)' }}>
@@ -980,7 +966,7 @@ export default function AppShell({ user }: { user: User }) {
                           <div className="font-mono text-[11px] uppercase tracking-[0.1em]">
                             <span style={{ color: 'var(--muted)' }}># </span>recent_chats
                           </div>
-                          <span className="font-mono text-[11px]" style={{ color: 'var(--muted)' }}>{Math.min(sessions.length, 6)} of {sessions.length}</span>
+                          <span className="font-mono text-[11px]" style={{ color: 'var(--muted)' }}>{Math.min(sessions.length, 6)} из {sessions.length}</span>
                         </div>
                         <div className="space-y-px">
                           {sessions.slice(0, 6).map((s, idx) => {
@@ -1005,7 +991,7 @@ export default function AppShell({ user }: { user: User }) {
                 {/* Подсказка про девайсы (всегда внизу welcome) */}
                 {devices.length > 0 && (
                   <div className="mt-7 font-mono text-[11.5px] text-center" style={{ color: 'var(--muted)' }}>
-                    Управление устройствами — во вкладке <span style={{ color: 'var(--fg-2)' }}>Devices</span>
+                    Управление устройствами — во вкладке <span style={{ color: 'var(--fg-2)' }}>Устройства</span>
                   </div>
                 )}
               </div>
@@ -1368,6 +1354,7 @@ export default function AppShell({ user }: { user: User }) {
           if (t === 'home') setMobilePane('chat');
         }}
         badges={tabBarBadges}
+        userInitial={(user.name || user.email)[0] || '·'}
       />
 
       {drawerOpen && <div className="fixed inset-0 z-40 md:hidden animate-fadeIn"

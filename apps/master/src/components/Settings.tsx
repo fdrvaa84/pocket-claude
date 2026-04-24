@@ -32,9 +32,9 @@ type Theme = typeof THEMES[number];
 type Tab = 'invites' | 'theme' | 'account';
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof Ticket }> = [
-  { id: 'invites', label: 'Invites', icon: Ticket },
-  { id: 'theme', label: 'Theme', icon: Palette },
-  { id: 'account', label: 'Account', icon: UserIcon },
+  { id: 'invites', label: 'Приглашения', icon: Ticket },
+  { id: 'theme', label: 'Тема', icon: Palette },
+  { id: 'account', label: 'Аккаунт', icon: UserIcon },
 ];
 
 export default function Settings({
@@ -187,7 +187,7 @@ export default function Settings({
           className="flex items-center justify-between px-5 py-4"
           style={{ borderBottom: '1px solid var(--border)' }}
         >
-          <h2 className="text-base font-semibold">Settings</h2>
+          <h2 className="text-base font-semibold">Настройки</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-md flex items-center justify-center"

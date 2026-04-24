@@ -3,15 +3,16 @@
 /**
  * MobileTabBar — iOS-style bottom-tab-bar навигации для мобильного layout.
  *
- * Три крупных раздела приложения на мобиле:
- *   • Home     — текущий чат / welcome
- *   • Chats    — список всех чатов (sessions)
- *   • Devices  — список устройств (DevicesList)
+ * Четыре раздела приложения на мобиле:
+ *   • Главная    — текущий чат / welcome
+ *   • Чаты       — список всех чатов (sessions)
+ *   • Устройства — список устройств (DevicesList)
+ *   • Профиль    — Settings (Invites/Theme/Account + Logout), показывается как
+ *                  аватар-буква; ПЕРЕИМЕНОВАН из «Settings» — то же содержимое,
+ *                  но заход через профиль юзера, без отдельного settings-пункта.
  *
- * Settings убран — доступны через профиль-аватар в top-bar (Settings + Logout).
- *
- * Только мобильный layout (`md:hidden`). На desktop этим разделам соответствуют
- * sidebars — нижний бар не нужен.
+ * Только мобильный layout (`md:hidden`). На desktop есть левый sidebar с юзер-блоком
+ * внизу — тоже открывает Settings.
  *
  * Высота 54px + safe-area для iOS home-indicator.
  */
@@ -19,24 +20,24 @@
 import { Home, MessagesSquare, MonitorSmartphone } from 'lucide-react';
 
 export type MobileTab = 'home' | 'chats' | 'devices' | 'settings';
-// 'settings' оставляем в типе для обратной совместимости (старый сохранённый state),
-// но в bottom-bar его больше не рисуем — при попадании сюда AppShell рендерит
-// Settings inline. Новые заходы всегда выдают 'home' default.
+// settings = «Профиль» в UI, но id оставлен для совместимости с state.
 
 interface MobileTabBarProps {
   active: MobileTab;
   onChange: (tab: MobileTab) => void;
-  /** Цифры-бейджи рядом с иконками (например, кол-во онлайн-устройств). */
+  /** Цифры-бейджи рядом с иконками. */
   badges?: { chats?: number; devices?: number };
+  /** Инициал юзера для profile-tab (аватар). */
+  userInitial?: string;
 }
 
-const TABS: Array<{ id: MobileTab; label: string; icon: typeof Home }> = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'chats', label: 'Chats', icon: MessagesSquare },
-  { id: 'devices', label: 'Devices', icon: MonitorSmartphone },
+const FIXED_TABS: Array<{ id: Exclude<MobileTab, 'settings'>; label: string; icon: typeof Home }> = [
+  { id: 'home', label: 'Главная', icon: Home },
+  { id: 'chats', label: 'Чаты', icon: MessagesSquare },
+  { id: 'devices', label: 'Устройства', icon: MonitorSmartphone },
 ];
 
-export default function MobileTabBar({ active, onChange, badges }: MobileTabBarProps) {
+export default function MobileTabBar({ active, onChange, badges, userInitial = '·' }: MobileTabBarProps) {
   return (
     <nav
       role="tablist"
@@ -45,13 +46,11 @@ export default function MobileTabBar({ active, onChange, badges }: MobileTabBarP
       style={{
         background: 'var(--surface)',
         borderTop: '1px solid var(--border)',
-        // safe-bottom: 54px высоты + env(safe-area-inset-bottom) для home-indicator
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        // Лёгкий backdrop, чтобы при скролле контент не сливался с баром.
         boxShadow: '0 -1px 0 rgba(0,0,0,.02)',
       }}
     >
-      {TABS.map((t) => {
+      {FIXED_TABS.map((t) => {
         const Icon = t.icon;
         const isActive = active === t.id;
         const badgeRaw =
@@ -68,7 +67,6 @@ export default function MobileTabBar({ active, onChange, badges }: MobileTabBarP
             onClick={() => onChange(t.id)}
             className="flex-1 flex flex-col items-center justify-center gap-0.5 relative"
             style={{
-              // Минимум 54px высоты и 44×44 hit-area по гайдлайнам Apple HIG.
               minHeight: 54,
               color: isActive ? 'var(--accent)' : 'var(--muted)',
               fontWeight: isActive ? 600 : 400,
@@ -81,14 +79,9 @@ export default function MobileTabBar({ active, onChange, badges }: MobileTabBarP
                 <span
                   className="absolute -top-1 -right-2 inline-flex items-center justify-center font-mono"
                   style={{
-                    minWidth: 16,
-                    height: 16,
-                    padding: '0 4px',
-                    fontSize: 10,
-                    lineHeight: '16px',
-                    borderRadius: 8,
-                    background: 'var(--accent)',
-                    color: 'var(--bg)',
+                    minWidth: 16, height: 16, padding: '0 4px',
+                    fontSize: 10, lineHeight: '16px', borderRadius: 8,
+                    background: 'var(--accent)', color: 'var(--bg)',
                   }}
                 >
                   {badge > 99 ? '99+' : badge}
@@ -99,17 +92,47 @@ export default function MobileTabBar({ active, onChange, badges }: MobileTabBarP
             {isActive && (
               <span
                 className="absolute top-0 left-1/2 -translate-x-1/2"
-                style={{
-                  width: 28,
-                  height: 2,
-                  background: 'var(--accent)',
-                  borderRadius: 0,
-                }}
+                style={{ width: 28, height: 2, background: 'var(--accent)', borderRadius: 0 }}
               />
             )}
           </button>
         );
       })}
+
+      {/* Profile tab — аватар с первой буквой юзера, не generic-иконка */}
+      <button
+        role="tab"
+        aria-selected={active === 'settings'}
+        aria-label="Профиль"
+        onClick={() => onChange('settings')}
+        className="flex-1 flex flex-col items-center justify-center gap-0.5 relative"
+        style={{
+          minHeight: 54,
+          color: active === 'settings' ? 'var(--accent)' : 'var(--muted)',
+          fontWeight: active === 'settings' ? 600 : 400,
+          transition: 'color 120ms ease',
+        }}
+      >
+        <span
+          className="inline-flex items-center justify-center font-semibold"
+          style={{
+            width: 24, height: 24, borderRadius: '50%',
+            background: active === 'settings' ? 'var(--accent)' : 'var(--surface-2)',
+            color: active === 'settings' ? 'var(--bg)' : 'var(--fg-2)',
+            border: active === 'settings' ? 'none' : '1px solid var(--border)',
+            fontSize: 12,
+          }}
+        >
+          {userInitial.toUpperCase()}
+        </span>
+        <span style={{ fontSize: 10.5, lineHeight: 1.1 }}>Профиль</span>
+        {active === 'settings' && (
+          <span
+            className="absolute top-0 left-1/2 -translate-x-1/2"
+            style={{ width: 28, height: 2, background: 'var(--accent)', borderRadius: 0 }}
+          />
+        )}
+      </button>
     </nav>
   );
 }

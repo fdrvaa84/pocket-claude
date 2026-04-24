@@ -530,7 +530,7 @@ export default function PtyTerminal({ deviceId, deviceName, cwd, mobileBar, onEx
                 }}
                 className="shrink-0 font-mono text-[10.5px] px-1.5 py-0.5 rounded"
                 style={{ background: '#262626', color: '#d4d4aa', border: '1px solid #404040' }}>
-                {urlCopied === url ? '✓' : 'Copy'}
+                {urlCopied === url ? '✓' : 'Копировать'}
               </button>
             </div>
           ))}
