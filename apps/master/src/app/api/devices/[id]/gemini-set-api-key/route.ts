@@ -89,10 +89,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         `else`,
         `  echo "[warn] gemini --version дал ошибку, но ключ записан"`,
         `fi`,
-        // 5. Рестартим agent если он жив
+        // 5. Рестартим agent через nohup+disown — ОТДЕЛЬНЫМ процессом с задержкой,
+        //    чтобы наш текущий exec (который сам крутится в этом агенте!) успел
+        //    вернуть exec.exit и SSE закрылся корректно. Без этого restart убивает
+        //    агента прямо посреди команды → UI залипает в "busy".
         `if [ -n "$SVC" ] && systemctl is-active --quiet "$SVC" 2>/dev/null; then`,
-        `  systemctl restart "$SVC"`,
-        `  echo "[info] агент перезапущен с новым GEMINI_API_KEY"`,
+        `  nohup bash -c "sleep 2 && systemctl restart $SVC" >/dev/null 2>&1 &`,
+        `  disown 2>/dev/null || true`,
+        `  echo "[info] agent будет перезапущен через 2с (detached)"`,
         `fi`,
       ].join('\n');
 

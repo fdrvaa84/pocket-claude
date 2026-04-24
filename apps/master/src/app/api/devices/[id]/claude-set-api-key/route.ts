@@ -88,10 +88,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         `else`,
         `  echo "[warn] claude --version дал ошибку, но ключ записан"`,
         `fi`,
-        // 4. Рестартим agent чтобы он подхватил новую env
+        // 4. Рестартим agent через nohup+disown — detached, чтобы наш exec успел
+        //    вернуть exit и SSE закрылся до того как systemd нас убьёт.
         `if [ -n "$SVC" ] && systemctl is-active --quiet "$SVC" 2>/dev/null; then`,
-        `  systemctl restart "$SVC"`,
-        `  echo "[info] $SVC restarted with new API key"`,
+        `  nohup bash -c "sleep 2 && systemctl restart $SVC" >/dev/null 2>&1 &`,
+        `  disown 2>/dev/null || true`,
+        `  echo "[info] $SVC restart запланирован через 2с (detached)"`,
         `fi`,
       ].join('\n');
 
