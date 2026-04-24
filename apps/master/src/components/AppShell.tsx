@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import {
   Plus, Settings as SettingsIcon, Menu, X, ChevronRight, ChevronDown,
   FolderOpen, Files, TerminalSquare, MessageSquare,
-  Send, Loader2, ArrowLeft, Mic, Square as StopIcon,
+  Send, Loader2, ArrowLeft, Mic,
 } from 'lucide-react';
 import Markdown from './Markdown';
 import { COMMANDS, matchCommands, parseSlash, findCommand } from './slashCommands';
@@ -40,6 +40,12 @@ interface Message { id?: string; role: 'user' | 'assistant' | 'system'; content:
 
 const THEMES = ['soft', 'light', 'dark'] as const;
 
+function formatVoiceTimer(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export default function AppShell({ user }: { user: User }) {
   const [theme, setTheme] = useState<typeof THEMES[number]>('soft');
   const [devices, setDevices] = useState<Device[]>([]);
@@ -52,16 +58,16 @@ export default function AppShell({ user }: { user: User }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
 
-  // === Голосовой ввод (Web Speech API) ============================
-  // Позиция курсора в textarea на момент старта записи. Распознанный
-  // текст вставляем по этой позиции, чтобы юзер мог надиктовать в середину
-  // уже набранной фразы.
+  // === Голосовой ввод (Web Speech API + ChatGPT-style UI) =========
+  // ChatGPT-style: при записи композер целиком превращается в waveform-режим
+  // с ✗ слева и ✓ справа. Распознанный текст инсертится в input по позиции
+  // курсора (можно надиктовать в середину уже набранной фразы).
   const speechAnchorRef = useRef<{ before: string; after: string } | null>(null);
+  const [voiceTimer, setVoiceTimer] = useState(0);   // секунды записи для индикатора
   const speech = useSpeechRecognition({
     onTranscript: (text, isFinal) => {
       const anchor = speechAnchorRef.current;
       if (!anchor) return;
-      // Склейка: то что было ДО позиции курсора + распознанное + то что ПОСЛЕ
       const sep = anchor.before && !/\s$/.test(anchor.before) ? ' ' : '';
       setInput(anchor.before + sep + text + (anchor.after ? ' ' + anchor.after : ''));
       if (isFinal) speechAnchorRef.current = null;
@@ -72,15 +78,35 @@ export default function AppShell({ user }: { user: User }) {
       alert('Браузер не поддерживает голосовой ввод. Попробуй Chrome или Safari (iOS 14.5+).');
       return;
     }
-    // Запоминаем где курсор в textarea — туда будем вставлять
     const ta = taRef.current;
     const cursor = ta?.selectionStart ?? input.length;
     speechAnchorRef.current = {
       before: input.slice(0, cursor),
       after: input.slice(cursor),
     };
+    setVoiceTimer(0);
     speech.start();
   }, [speech, input]);
+  /** ✓ — стоп, текст оставить в input как есть */
+  const confirmVoice = useCallback(() => {
+    speech.stop();
+  }, [speech]);
+  /** ✗ — стоп, восстановить input до состояния до записи */
+  const cancelVoice = useCallback(() => {
+    const anchor = speechAnchorRef.current;
+    speech.stop();
+    if (anchor) {
+      const sep = anchor.before && anchor.after && !/\s$/.test(anchor.before) ? ' ' : '';
+      setInput(anchor.before + (anchor.after ? sep + anchor.after : ''));
+    }
+    speechAnchorRef.current = null;
+  }, [speech]);
+  // Таймер: тикает каждую секунду пока listening
+  useEffect(() => {
+    if (!speech.listening) { setVoiceTimer(0); return; }
+    const id = setInterval(() => setVoiceTimer((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [speech.listening]);
   // ================================================================
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -1003,72 +1029,89 @@ export default function AppShell({ user }: { user: User }) {
               </div>
             )}
 
-            {/* Voice status / error — показываем над input row если активна запись или ошибка */}
-            {(speech.listening || speech.error) && (
+            {/* Voice error — показываем когда не listening (если запись активна, ошибка вылезет позже) */}
+            {!speech.listening && speech.error && (
               <div className="flex items-center gap-2 px-3 mb-1.5 text-[12px]"
-                style={{ color: speech.error ? 'var(--danger)' : 'var(--vibrant)' }}>
-                {speech.listening && (
-                  <>
-                    <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--danger)', animation: 'pulse 1s infinite' }} />
-                    <span>Слушаю… {speech.transcript ? `«${speech.transcript.slice(-40)}»` : 'говори'}</span>
-                  </>
-                )}
-                {!speech.listening && speech.error && <span>⚠ {speech.error}</span>}
+                style={{ color: 'var(--danger)' }}>
+                <span>⚠ {speech.error}</span>
               </div>
             )}
 
-            {/* Input row */}
-            <div className="flex items-end gap-1.5 md:gap-2.5 px-1.5 md:px-3 py-1.5 md:py-2.5 rounded-[24px] md:rounded-xl"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)' }}>
-              {/* + — открывает mobile sheet с настройками + tools. На desktop прячем. */}
-              <button type="button" onClick={() => setMobileSheetOpen(true)}
-                disabled={!activeProjectId}
-                className="md:hidden w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30 shrink-0"
-                style={{ color: mobileSheetOpen ? 'var(--bg)' : 'var(--fg-2)', background: mobileSheetOpen ? 'var(--accent)' : 'transparent' }}
-                aria-label="Настройки">
-                <Plus size={22} />
-              </button>
-              {/* $ prompt — только на desktop */}
-              <span className="hidden md:inline font-mono text-[14px] pt-[3px] shrink-0" style={{ color: 'var(--muted)' }}>$</span>
-              <textarea ref={taRef} value={input}
-                onChange={(e) => { setInput(e.target.value); setSlashOpen(e.target.value.startsWith('/')); setSlashIdx(0); }}
-                onKeyDown={onKey} rows={1}
-                disabled={sending || !activeProjectId}
-                placeholder={!activeProjectId ? 'Выбери проект…' : sending ? 'Жду ответ…' : 'Сообщение…'}
-                className="flex-1 bg-transparent outline-none resize-none text-[16px] md:text-[14px] leading-[1.4] placeholder:opacity-50 py-2 md:pt-0.5"
-                style={{ maxHeight: 200 }} />
-              {/* Кнопка справа:
-                  - listening → красный stop (микрофон активен, тап = стоп)
-                  - sending     → spinner-like Send (заблокирован)
-                  - input пуст  → серый Mic (тап = старт записи)
-                  - input есть  → акцентный Send (тап = отправить) */}
-              {speech.listening ? (
-                <button type="button"
-                  onClick={() => speech.stop()}
-                  className="w-10 h-10 md:w-8 md:h-8 rounded-full flex items-center justify-center shrink-0 voice-pulse"
-                  style={{ background: 'var(--danger)', color: '#fff' }}
-                  aria-label="Стоп запись">
-                  <StopIcon size={14} fill="currentColor" />
+            {/* Input row — режим ChatGPT-voice или обычный композер */}
+            {speech.listening ? (
+              /* === Voice recording mode (ChatGPT-style) === */
+              <div className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 md:py-2.5 rounded-[24px] md:rounded-xl voice-rec-bar"
+                style={{ background: 'var(--surface)', border: '1px solid var(--vibrant)' }}>
+                {/* ✗ Cancel — discard transcript */}
+                <button type="button" onClick={cancelVoice}
+                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors"
+                  style={{ background: 'var(--surface-2)', color: 'var(--danger)' }}
+                  aria-label="Отмена">
+                  <X size={18} />
                 </button>
-              ) : input.trim().length === 0 && !sending ? (
-                <button type="button"
-                  onClick={startVoice}
+
+                {/* Waveform — 12 баров с псевдо-аудио-уровнем */}
+                <div className="flex-1 flex items-center justify-center gap-[3px] h-10 voice-waveform">
+                  {Array.from({ length: 14 }).map((_, i) => (
+                    <span key={i} className="voice-bar" style={{ animationDelay: `${i * 70}ms` }} />
+                  ))}
+                </div>
+
+                {/* Timer */}
+                <span className="font-mono text-[13px] tabular-nums shrink-0" style={{ color: 'var(--muted)' }}>
+                  {formatVoiceTimer(voiceTimer)}
+                </span>
+
+                {/* ✓ Confirm — keep transcript */}
+                <button type="button" onClick={confirmVoice}
+                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 voice-pulse"
+                  style={{ background: 'var(--vibrant)', color: 'var(--vibrant-fg)' }}
+                  aria-label="Готово">
+                  <Send size={16} />
+                </button>
+              </div>
+            ) : (
+              /* === Normal composer === */
+              <div className="flex items-end gap-1.5 md:gap-2.5 px-1.5 md:px-3 py-1.5 md:py-2.5 rounded-[24px] md:rounded-xl"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)' }}>
+                {/* + — открывает mobile sheet с настройками + tools. На desktop прячем. */}
+                <button type="button" onClick={() => setMobileSheetOpen(true)}
                   disabled={!activeProjectId}
-                  className="w-10 h-10 md:w-8 md:h-8 rounded-full flex items-center justify-center disabled:opacity-30 shrink-0"
-                  style={{ color: speech.supported ? 'var(--muted)' : 'var(--muted)', opacity: speech.supported ? 1 : 0.5 }}
-                  title={speech.supported ? 'Голосовой ввод' : 'Браузер не поддерживает голос'}
-                  aria-label="Голос">
-                  <Mic size={18} />
+                  className="md:hidden w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30 shrink-0"
+                  style={{ color: mobileSheetOpen ? 'var(--bg)' : 'var(--fg-2)', background: mobileSheetOpen ? 'var(--accent)' : 'transparent' }}
+                  aria-label="Настройки">
+                  <Plus size={22} />
                 </button>
-              ) : (
-                <button onClick={() => sendMessage(input)} disabled={sending || !input.trim()}
-                  className="w-10 h-10 md:w-8 md:h-8 rounded-full md:rounded-md flex items-center justify-center disabled:opacity-30 shrink-0"
-                  style={{ background: 'var(--accent)', color: 'var(--bg)' }}
-                  aria-label="Отправить">
-                  {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={14} />}
-                </button>
-              )}
-            </div>
+                {/* $ prompt — только на desktop */}
+                <span className="hidden md:inline font-mono text-[14px] pt-[3px] shrink-0" style={{ color: 'var(--muted)' }}>$</span>
+                <textarea ref={taRef} value={input}
+                  onChange={(e) => { setInput(e.target.value); setSlashOpen(e.target.value.startsWith('/')); setSlashIdx(0); }}
+                  onKeyDown={onKey} rows={1}
+                  disabled={sending || !activeProjectId}
+                  placeholder={!activeProjectId ? 'Выбери проект…' : sending ? 'Жду ответ…' : 'Сообщение…'}
+                  className="flex-1 bg-transparent outline-none resize-none text-[16px] md:text-[14px] leading-[1.4] placeholder:opacity-50 py-2 md:pt-0.5"
+                  style={{ maxHeight: 200 }} />
+                {/* Кнопка справа: Mic если пусто, Send если есть текст */}
+                {input.trim().length === 0 && !sending ? (
+                  <button type="button"
+                    onClick={startVoice}
+                    disabled={!activeProjectId}
+                    className="w-10 h-10 md:w-8 md:h-8 rounded-full flex items-center justify-center disabled:opacity-30 shrink-0"
+                    style={{ color: 'var(--muted)', opacity: speech.supported ? 1 : 0.5 }}
+                    title={speech.supported ? 'Голосовой ввод' : 'Браузер не поддерживает голос'}
+                    aria-label="Голос">
+                    <Mic size={18} />
+                  </button>
+                ) : (
+                  <button onClick={() => sendMessage(input)} disabled={sending || !input.trim()}
+                    className="w-10 h-10 md:w-8 md:h-8 rounded-full md:rounded-md flex items-center justify-center disabled:opacity-30 shrink-0"
+                    style={{ background: 'var(--accent)', color: 'var(--bg)' }}
+                    aria-label="Отправить">
+                    {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={14} />}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Pills row — только на desktop. На mobile модель/режим живут в topbar. */}
             <div className="hidden md:flex items-center gap-1.5 mt-2 flex-wrap">

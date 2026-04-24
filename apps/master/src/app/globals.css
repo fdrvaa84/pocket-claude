@@ -224,13 +224,45 @@ input, textarea, select { font: inherit; color: inherit; }
 
 .divider { height: 1px; background: var(--border); margin: 0; }
 
-/* Voice-recording pulse — красная Mic-кнопка пульсирует */
+/* Voice-recording UI (ChatGPT-style) */
+
+/* Pulse вокруг Send-кнопки в rec-режиме (зелёный, не красный — теперь это «готово») */
 @keyframes voice-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(220, 38, 38, .6); }
-  70%  { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(4, 120, 87, .35); }
+  70%  { box-shadow: 0 0 0 8px rgba(4, 120, 87, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(4, 120, 87, 0); }
 }
-.voice-pulse { animation: voice-pulse 1.4s infinite; }
+.voice-pulse { animation: voice-pulse 1.6s infinite; }
+
+/* Лёгкое появление bar-режима */
+.voice-rec-bar {
+  animation: fadeIn .18s ease-out both;
+  box-shadow: 0 0 0 3px rgba(4, 120, 87, .08);
+}
+
+/* Waveform — 14 баров, каждый растёт-сжимается по своему ритму.
+   Имитирует аудио-уровень без реального AudioContext (MVP). */
+@keyframes voice-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  20%      { transform: scaleY(1);   }
+  40%      { transform: scaleY(0.5); }
+  60%      { transform: scaleY(0.8); }
+  80%      { transform: scaleY(0.4); }
+}
+.voice-waveform .voice-bar {
+  display: inline-block;
+  width: 3px;
+  height: 100%;
+  background: var(--vibrant);
+  border-radius: 2px;
+  transform-origin: center;
+  animation: voice-bar 1s ease-in-out infinite;
+}
+/* Каждый второй и третий — со своим offset, чтобы выглядело псевдо-случайно */
+.voice-waveform .voice-bar:nth-child(2n)  { animation-duration: 0.85s; opacity: .85; }
+.voice-waveform .voice-bar:nth-child(3n)  { animation-duration: 1.15s; opacity: .7; }
+.voice-waveform .voice-bar:nth-child(5n)  { animation-duration: 0.7s;  opacity: .9; }
+.voice-waveform .voice-bar:nth-child(7n)  { animation-duration: 1.3s;  opacity: .65; }
 
 /* safe-bottom/top: минимум 16px всегда, плюс device safe-area (home-indicator / notch).
    Без min-fallback Android и desktop-браузеры получали padding-bottom: 0, и композер
