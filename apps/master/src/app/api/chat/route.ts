@@ -11,6 +11,7 @@ import { processClaudeMessage, startJob } from '@/lib/job-tracker';
 import { issueRfsToken } from '@/lib/rfs-tokens';
 import { effectiveIntent } from '@/lib/device-intent';
 import { resolveModel, type Provider } from '@/lib/models';
+import { parseCliError } from '@/lib/cli-error-parser';
 
 /**
  * В proxy-режиме claude запускается в пустом /tmp на worker'е — там нет CLAUDE.md проекта.
@@ -322,11 +323,15 @@ export async function POST(req: NextRequest) {
             try { controller.close(); } catch {}
           } else if (msg.type === 'claude.error') {
             const err = msg as ClaudeError;
+            // Парсим сырой stderr в структурированную ошибку с подсказкой
+            // и action-кнопками (напр. «переключиться на Flash» при quota).
+            const parsed = parseCliError(err.message || '', provider, model);
             closed = true;
             clearInterval(keepAlive);
             unsub();
-            finalize(err.message);
-            push({ type: 'error', error: err.message });
+            // В БД сохраняем только title — это то что видно при reload истории.
+            finalize(parsed.title);
+            push({ type: 'error', error: parsed.title, details: parsed });
             try { controller.close(); } catch {}
           }
         });

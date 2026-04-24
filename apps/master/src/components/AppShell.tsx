@@ -52,7 +52,14 @@ interface Project {
   default_model?: string | null;
 }
 interface Session { id: string; title: string; project_id: string | null; updated_at: string; claude_session_id: string | null }
-interface Message { id?: string; role: 'user' | 'assistant' | 'system'; content: string; tool_events?: any[] }
+interface Message {
+  id?: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  tool_events?: any[];
+  /** Ephemeral — приходит с SSE, не сохраняется в БД. При reload undefined. */
+  errorDetails?: import('@/lib/cli-error-parser').ParsedCliError;
+}
 
 const THEMES = ['soft', 'light', 'dark'] as const;
 
@@ -311,7 +318,7 @@ export default function AppShell({ user }: { user: User }) {
     return false;
   }, [activeProjectId]);
 
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback(async (text: string, overrideModel?: string) => {
     if (!text.trim() || sending) return;
     if (await handleSlash(text)) return;
     if (!activeProjectId) { alert('Выбери проект слева'); return; }
@@ -321,7 +328,7 @@ export default function AppShell({ user }: { user: User }) {
     try {
       const res = await fetch('/api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, sessionId: activeSessionId, projectId: activeProjectId, model, permissionMode, effort }),
+        body: JSON.stringify({ message: text, sessionId: activeSessionId, projectId: activeProjectId, model: overrideModel || model, permissionMode, effort }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -350,7 +357,17 @@ export default function AppShell({ user }: { user: User }) {
             } else if (ev.type === 'tool_use') {
               setTools((t) => [...t, { id: `${Date.now()}-${Math.random()}`, tool: ev.tool, input: ev.toolInput }]);
             } else if (ev.type === 'error') {
-              setMessages((m) => { const c = [...m]; c[c.length - 1] = { role: 'assistant', content: `❌ ${ev.error}` }; return c; });
+              // Распарсенная ошибка с подсказкой и actions — из /api/chat через parseCliError.
+              // Храним structured в message.errorDetails для богатой карточки.
+              setMessages((m) => {
+                const c = [...m];
+                c[c.length - 1] = {
+                  role: 'assistant',
+                  content: `❌ ${ev.error}`,
+                  errorDetails: ev.details,
+                };
+                return c;
+              });
             }
           } catch {}
         }
@@ -1139,7 +1156,16 @@ export default function AppShell({ user }: { user: User }) {
                       border: '1px solid var(--border)',
                       borderRadius: '12px 12px 4px 12px',
                     } : {}}>
-                    {m.content
+                    {m.errorDetails ? (
+                      <ErrorCard
+                        details={m.errorDetails}
+                        onRetryWithModel={(newModel) => {
+                          setModel(newModel);
+                          const lastUser = [...messages].reverse().find((x) => x.role === 'user');
+                          if (lastUser) sendMessage(lastUser.content, newModel);
+                        }}
+                      />
+                    ) : m.content
                       ? (m.role === 'user'
                           ? <span className="whitespace-pre-wrap text-[14px]">{m.content}</span>
                           : <Markdown content={m.content} />)
@@ -1432,6 +1458,88 @@ export default function AppShell({ user }: { user: User }) {
           setTimeout(() => taRef.current?.focus(), 100);
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * Карточка ошибки CLI — красивый UI вместо портянки stderr.
+ * Получает ParsedCliError (from @/lib/cli-error-parser) с title/suggestion/actions/raw.
+ * Actions — кнопки которые делают что-то полезное, например ретрай на другой модели.
+ */
+function ErrorCard({
+  details,
+  onRetryWithModel,
+}: {
+  details: import('@/lib/cli-error-parser').ParsedCliError;
+  onRetryWithModel: (model: string) => void;
+}) {
+  const [showRaw, setShowRaw] = useState(false);
+  const kindIcon =
+    details.kind === 'quota' ? '⏱' :
+    details.kind === 'geo' ? '🌍' :
+    details.kind === 'auth' ? '🔑' :
+    details.kind === 'model-not-found' ? '🔍' :
+    details.kind === 'network' ? '📡' :
+    '⚠';
+
+  return (
+    <div className="rounded-xl p-3.5 flex flex-col gap-2"
+      style={{
+        background: 'var(--danger-bg)',
+        border: '1px solid var(--danger)',
+        color: 'var(--fg)',
+      }}>
+      <div className="flex items-start gap-2.5">
+        <span style={{ fontSize: 18, lineHeight: 1.1 }}>{kindIcon}</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13.5px] font-semibold" style={{ color: 'var(--danger)' }}>
+            {details.title}
+          </div>
+          {details.suggestion && (
+            <div className="text-[12.5px] mt-1" style={{ color: 'var(--fg-2)' }}>
+              {details.suggestion}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      {(details.actions?.length || details.docUrl) && (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {details.actions?.map((a, i) => (
+            <button key={i}
+              onClick={() => a.type === 'switch-model' && onRetryWithModel(a.model)}
+              className="px-3 py-1.5 rounded-md text-[12px] font-medium"
+              style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
+              {a.label}
+            </button>
+          ))}
+          {details.docUrl && (
+            <a href={details.docUrl} target="_blank" rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-md text-[12px] font-medium"
+              style={{ background: 'var(--surface)', color: 'var(--fg)', border: '1px solid var(--border)' }}>
+              Открыть в Google AI Studio ↗
+            </a>
+          )}
+        </div>
+      )}
+
+      {/* Raw details disclosure */}
+      <div className="pt-1">
+        <button
+          onClick={() => setShowRaw(!showRaw)}
+          className="text-[11px] font-mono"
+          style={{ color: 'var(--muted)' }}>
+          {showRaw ? '▾ Скрыть детали' : '▸ Показать детали'}
+        </button>
+        {showRaw && (
+          <pre className="mt-1.5 p-2 rounded text-[10.5px] font-mono whitespace-pre-wrap break-all overflow-auto max-h-48"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--fg-2)' }}>
+            {details.raw}
+          </pre>
+        )}
+      </div>
     </div>
   );
 }
