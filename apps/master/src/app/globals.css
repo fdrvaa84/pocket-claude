@@ -224,6 +224,14 @@ input, textarea, select { font: inherit; color: inherit; }
 
 .divider { height: 1px; background: var(--border); margin: 0; }
 
+/* Voice-recording pulse — красная Mic-кнопка пульсирует */
+@keyframes voice-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(220, 38, 38, .6); }
+  70%  { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+.voice-pulse { animation: voice-pulse 1.4s infinite; }
+
 /* safe-bottom/top: минимум 16px всегда, плюс device safe-area (home-indicator / notch).
    Без min-fallback Android и desktop-браузеры получали padding-bottom: 0, и композер
    прилипал к нижнему URL-бару браузера. */

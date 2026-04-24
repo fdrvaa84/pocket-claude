@@ -5,12 +5,13 @@ import dynamic from 'next/dynamic';
 import {
   Plus, Settings as SettingsIcon, Menu, X, ChevronRight, ChevronDown,
   FolderOpen, Files, TerminalSquare, MessageSquare,
-  Send, Loader2, ArrowLeft, Mic,
+  Send, Loader2, ArrowLeft, Mic, Square as StopIcon,
 } from 'lucide-react';
 import Markdown from './Markdown';
 import { COMMANDS, matchCommands, parseSlash, findCommand } from './slashCommands';
 import { ModePill, ModelEffortPill, MODELS, MODES, EFFORTS, type ModelValue, type EffortValue, type ModeValue } from './Controls';
 import { effectiveIntent, type DeviceIntent } from '@/lib/device-intent';
+import { useSpeechRecognition } from '@/lib/useSpeechRecognition';
 
 const FileTree = dynamic(() => import('./FileTree'), { ssr: false, loading: () => null });
 const Terminal = dynamic(() => import('./Terminal'), { ssr: false, loading: () => null });
@@ -50,6 +51,37 @@ export default function AppShell({ user }: { user: User }) {
   const [tools, setTools] = useState<Array<{ id: string; tool: string; input?: string }>>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+
+  // === Голосовой ввод (Web Speech API) ============================
+  // Позиция курсора в textarea на момент старта записи. Распознанный
+  // текст вставляем по этой позиции, чтобы юзер мог надиктовать в середину
+  // уже набранной фразы.
+  const speechAnchorRef = useRef<{ before: string; after: string } | null>(null);
+  const speech = useSpeechRecognition({
+    onTranscript: (text, isFinal) => {
+      const anchor = speechAnchorRef.current;
+      if (!anchor) return;
+      // Склейка: то что было ДО позиции курсора + распознанное + то что ПОСЛЕ
+      const sep = anchor.before && !/\s$/.test(anchor.before) ? ' ' : '';
+      setInput(anchor.before + sep + text + (anchor.after ? ' ' + anchor.after : ''));
+      if (isFinal) speechAnchorRef.current = null;
+    },
+  });
+  const startVoice = useCallback(() => {
+    if (!speech.supported) {
+      alert('Браузер не поддерживает голосовой ввод. Попробуй Chrome или Safari (iOS 14.5+).');
+      return;
+    }
+    // Запоминаем где курсор в textarea — туда будем вставлять
+    const ta = taRef.current;
+    const cursor = ta?.selectionStart ?? input.length;
+    speechAnchorRef.current = {
+      before: input.slice(0, cursor),
+      after: input.slice(cursor),
+    };
+    speech.start();
+  }, [speech, input]);
+  // ================================================================
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(true);
@@ -971,6 +1003,20 @@ export default function AppShell({ user }: { user: User }) {
               </div>
             )}
 
+            {/* Voice status / error — показываем над input row если активна запись или ошибка */}
+            {(speech.listening || speech.error) && (
+              <div className="flex items-center gap-2 px-3 mb-1.5 text-[12px]"
+                style={{ color: speech.error ? 'var(--danger)' : 'var(--vibrant)' }}>
+                {speech.listening && (
+                  <>
+                    <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--danger)', animation: 'pulse 1s infinite' }} />
+                    <span>Слушаю… {speech.transcript ? `«${speech.transcript.slice(-40)}»` : 'говори'}</span>
+                  </>
+                )}
+                {!speech.listening && speech.error && <span>⚠ {speech.error}</span>}
+              </div>
+            )}
+
             {/* Input row */}
             <div className="flex items-end gap-1.5 md:gap-2.5 px-1.5 md:px-3 py-1.5 md:py-2.5 rounded-[24px] md:rounded-xl"
               style={{ background: 'var(--surface)', border: '1px solid var(--border-strong)' }}>
@@ -991,13 +1037,26 @@ export default function AppShell({ user }: { user: User }) {
                 placeholder={!activeProjectId ? 'Выбери проект…' : sending ? 'Жду ответ…' : 'Сообщение…'}
                 className="flex-1 bg-transparent outline-none resize-none text-[16px] md:text-[14px] leading-[1.4] placeholder:opacity-50 py-2 md:pt-0.5"
                 style={{ maxHeight: 200 }} />
-              {/* Кнопка справа: mic если пусто, send если есть текст или идёт отправка */}
-              {input.trim().length === 0 && !sending ? (
+              {/* Кнопка справа:
+                  - listening → красный stop (микрофон активен, тап = стоп)
+                  - sending     → spinner-like Send (заблокирован)
+                  - input пуст  → серый Mic (тап = старт записи)
+                  - input есть  → акцентный Send (тап = отправить) */}
+              {speech.listening ? (
                 <button type="button"
-                  onClick={() => alert('Голосовой ввод — скоро')}
+                  onClick={() => speech.stop()}
+                  className="w-10 h-10 md:w-8 md:h-8 rounded-full flex items-center justify-center shrink-0 voice-pulse"
+                  style={{ background: 'var(--danger)', color: '#fff' }}
+                  aria-label="Стоп запись">
+                  <StopIcon size={14} fill="currentColor" />
+                </button>
+              ) : input.trim().length === 0 && !sending ? (
+                <button type="button"
+                  onClick={startVoice}
                   disabled={!activeProjectId}
                   className="w-10 h-10 md:w-8 md:h-8 rounded-full flex items-center justify-center disabled:opacity-30 shrink-0"
-                  style={{ color: 'var(--muted)' }}
+                  style={{ color: speech.supported ? 'var(--muted)' : 'var(--muted)', opacity: speech.supported ? 1 : 0.5 }}
+                  title={speech.supported ? 'Голосовой ввод' : 'Браузер не поддерживает голос'}
                   aria-label="Голос">
                   <Mic size={18} />
                 </button>
