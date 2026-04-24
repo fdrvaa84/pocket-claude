@@ -25,11 +25,14 @@ interface Props {
   onClose: () => void;
   /** Вернуть выбранную папку — для создания проекта */
   onPick?: (path: string) => void;
-  /** Embedded-режим — без модалки/хедера, для вложения в другой контейнер */
+  /** Embedded-режим — без модалки/хедера, для вложения в другой контейнер.
+   *  В embedded-режиме также спрятана кнопка «+ папка» — создание отдаётся родителю. */
   embedded?: boolean;
+  /** Подпись для CTA-кнопки (по умолчанию «Выбрать эту папку»). */
+  pickLabel?: string;
 }
 
-export default function DeviceBrowser({ deviceId, deviceName, initialPath, onClose, onPick, embedded = false }: Props) {
+export default function DeviceBrowser({ deviceId, deviceName, initialPath, onClose, onPick, embedded = false, pickLabel = 'Выбрать эту папку' }: Props) {
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -229,7 +232,7 @@ export default function DeviceBrowser({ deviceId, deviceName, initialPath, onClo
                   )}
                 </button>
               ))}
-              {showCreate && (
+              {showCreate && !embedded && (
                 <div className="px-4 py-2 flex items-center gap-2">
                   <span>📁</span>
                   <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
@@ -249,15 +252,17 @@ export default function DeviceBrowser({ deviceId, deviceName, initialPath, onClo
         <div className="px-5 py-3 flex items-center gap-2 flex-wrap" style={{ borderTop: '1px solid var(--border)' }}>
           {data?.path ? (
             <>
-              <button onClick={() => setShowCreate(!showCreate)}
-                className="text-xs px-3 py-1.5 rounded-full" style={{ background: 'var(--accent-light)' }}>+ папка</button>
+              {!embedded && (
+                <button onClick={() => setShowCreate(!showCreate)}
+                  className="text-xs px-3 py-1.5 rounded-full" style={{ background: 'var(--accent-light)' }}>+ папка</button>
+              )}
               <div className="flex-1" />
               <div className="text-[11px] truncate font-mono" style={{ color: 'var(--muted)' }}>{data.path}</div>
               {onPick && (
                 <button onClick={() => onPick(data.path)}
                   className="text-xs px-3 py-1.5 rounded-full"
                   style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
-                  Выбрать эту папку
+                  {pickLabel}
                 </button>
               )}
             </>

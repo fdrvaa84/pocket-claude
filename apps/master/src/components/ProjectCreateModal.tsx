@@ -285,17 +285,26 @@ export default function ProjectCreateModal({ devices, onClose, onCreated }: Prop
 
           {/* === ШАГ 3a: выбор существующей папки === */}
           {(step === 'pick-existing' || step === 'pick-parent') && deviceId && (
-            <DeviceBrowser
-              deviceId={deviceId}
-              deviceName={selectedDevice?.name || ''}
-              initialPath={selectedDevice?.root_path || null}
-              onClose={() => { /* back-arrow в header обрабатывает это */ }}
-              onPick={(path) => {
-                if (step === 'pick-existing') createFromExisting(path);
-                else { setParentPath(path); setStep('name-new'); }
-              }}
-              embedded
-            />
+            <>
+              {step === 'pick-parent' && (
+                <div className="text-[12px] px-3 py-2 rounded-lg"
+                  style={{ background: 'var(--accent-light)', color: 'var(--muted)' }}>
+                  Выбери <b>родительскую</b> папку. Имя новой введёшь на следующем шаге.
+                </div>
+              )}
+              <DeviceBrowser
+                deviceId={deviceId}
+                deviceName={selectedDevice?.name || ''}
+                initialPath={selectedDevice?.root_path || null}
+                onClose={() => { /* back-arrow в header обрабатывает это */ }}
+                onPick={(path) => {
+                  if (step === 'pick-existing') createFromExisting(path);
+                  else { setParentPath(path); setStep('name-new'); }
+                }}
+                pickLabel={step === 'pick-parent' ? 'Создать здесь →' : 'Выбрать эту папку'}
+                embedded
+              />
+            </>
           )}
 
           {/* === ШАГ 3b: ввод имени новой папки === */}
