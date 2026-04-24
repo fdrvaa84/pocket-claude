@@ -156,25 +156,29 @@ export default function MobileChatSheet({
             style={{ color: 'var(--muted)' }}>Быстрые действия</div>
           <div className="rounded-[14px] overflow-hidden"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            {/* Файлы устройства */}
-            <button type="button"
-              onClick={() => { if (onOpenFiles) { onOpenFiles(); onClose(); } }}
-              className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-[15px]"
-              style={{ borderBottom: '1px solid var(--border)' }}>
-              <span className="w-6 text-center font-mono opacity-85">📁</span>
-              <span className="flex-1">Файлы устройства</span>
-              <span className="font-mono text-[11.5px]" style={{ color: 'var(--muted)' }}>⌘F</span>
-            </button>
+            {/* Файлы устройства (скрыто если колбек не передан — теперь через slash /files) */}
+            {onOpenFiles && (
+              <button type="button"
+                onClick={() => { onOpenFiles(); onClose(); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-[15px]"
+                style={{ borderBottom: '1px solid var(--border)' }}>
+                <span className="w-6 text-center font-mono opacity-85">📁</span>
+                <span className="flex-1">Файлы устройства</span>
+                <span className="font-mono text-[11.5px]" style={{ color: 'var(--muted)' }}>⌘F</span>
+              </button>
+            )}
 
-            {/* Terminal */}
-            <button type="button"
-              onClick={() => { if (onOpenTerminal) { onOpenTerminal(); onClose(); } }}
-              className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-[15px]"
-              style={{ borderBottom: '1px solid var(--border)' }}>
-              <span className="w-6 text-center font-mono opacity-85">&gt;_</span>
-              <span className="flex-1">Terminal</span>
-              <span className="font-mono text-[11.5px]" style={{ color: 'var(--muted)' }}>⌘T</span>
-            </button>
+            {/* Terminal (аналогично — скрыто если колбек не передан) */}
+            {onOpenTerminal && (
+              <button type="button"
+                onClick={() => { onOpenTerminal(); onClose(); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 text-left text-[15px]"
+                style={{ borderBottom: '1px solid var(--border)' }}>
+                <span className="w-6 text-center font-mono opacity-85">&gt;_</span>
+                <span className="flex-1">Terminal</span>
+                <span className="font-mono text-[11.5px]" style={{ color: 'var(--muted)' }}>⌘T</span>
+              </button>
+            )}
 
             {/* Slash-команды — аккордеон */}
             <button type="button"
