@@ -5,7 +5,7 @@ import { hub } from '@/lib/ws-hub';
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimit } from '@/lib/rate-limit';
 import { requireCsrf } from '@/lib/csrf';
-import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@pocket-claude/protocol';
+import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@autmzr/command-protocol';
 
 /**
  * POST /api/devices/[id]/claude-set-api-key  { apiKey: "sk-ant-..." }
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           // Обновляем статус в БД — logged_in=true. probeClaude при следующем
           // hello это всё равно пересчитает, но обновим сразу для отзывчивого UI.
           await query(
-            `UPDATE pc.devices SET claude_logged_in = true WHERE id = $1`,
+            `UPDATE pc.devices SET agent_logged_in = true WHERE id = $1`,
             [deviceIdSafe],
           ).catch(() => {});
           push({ type: 'ok', message: 'API-ключ сохранён, агент перезапущен' });

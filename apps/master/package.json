@@ -1,5 +1,5 @@
 {
-  "name": "@pocket-claude/master",
+  "name": "@autmzr/command-master",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "migrate": "tsx --env-file=../../.env server/migrate.ts"
   },
   "dependencies": {
-    "@pocket-claude/protocol": "*",
+    "@autmzr/command-protocol": "*",
     "@types/qrcode": "^1.5.6",
     "@types/ssh2": "^1.15.5",
     "@xterm/addon-fit": "^0.11.0",

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import type {
   PtyOpenRequest, PtyOpenedMessage, PtyDataMessage,
   PtyResizeMessage, PtyCloseMessage, PtyExitMessage, PtyErrorMessage,
-} from '@pocket-claude/protocol';
+} from '@autmzr/command-protocol';
 import { safePath, SafetyError } from '../safety.js';
 
 type PtyProcess = {

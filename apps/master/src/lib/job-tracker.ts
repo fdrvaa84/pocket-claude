@@ -1,5 +1,5 @@
 import { query, queryOne } from './db';
-import type { AnyMessage, ClaudeEvent, ClaudeDone, ClaudeError } from '@pocket-claude/protocol';
+import type { AnyMessage, ClaudeEvent, ClaudeDone, ClaudeError } from '@autmzr/command-protocol';
 
 /**
  * Управление persistent job-ами Claude.

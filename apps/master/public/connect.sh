@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pocket-Claude agent installer.
+# Autmzr Command agent installer.
 # Usage: curl -sSL <master>/connect.sh | bash -s -- --master wss://<host>/ws/agent --token <TOKEN> --name <NAME>
 set -euo pipefail
 
@@ -21,7 +21,54 @@ if [[ -z "$MASTER" || -z "$TOKEN" || -z "$NAME" ]]; then
   exit 1
 fi
 
-DIR="$HOME/.pocket-claude"
+# Новые имена (Autmzr Command). Старые — для миграции существующих установок.
+DIR="$HOME/.autmzr-command"
+LEGACY_DIR="$HOME/.pocket-claude"
+SERVICE_NAME="autmzr-command-agent"
+LEGACY_SERVICE_NAME="pocket-claude-agent"
+LAUNCHD_LABEL="dev.autmzr.command-agent"
+LEGACY_LAUNCHD_LABEL="dev.pocket-claude.agent"
+
+# ---------------------------------------------------------------
+# Миграция со старого имени (pocket-claude-agent → autmzr-command-agent).
+# Делаем ДО установки нового, чтобы не было двух одновременных агентов.
+# ---------------------------------------------------------------
+migrate_legacy() {
+  local OS_NAME
+  OS_NAME=$(uname -s)
+  if [[ "$OS_NAME" == "Linux" ]]; then
+    if [[ -f "/etc/systemd/system/${LEGACY_SERVICE_NAME}.service" ]] && [[ $EUID -eq 0 ]]; then
+      echo ">> Найден старый сервис ${LEGACY_SERVICE_NAME} — мигрирую."
+      systemctl disable --now "${LEGACY_SERVICE_NAME}" 2>/dev/null || true
+      rm -f "/etc/systemd/system/${LEGACY_SERVICE_NAME}.service"
+      systemctl daemon-reload
+    fi
+    if [[ -f "$HOME/.config/systemd/user/${LEGACY_SERVICE_NAME}.service" ]]; then
+      echo ">> Найден старый user-сервис ${LEGACY_SERVICE_NAME} — мигрирую."
+      systemctl --user disable --now "${LEGACY_SERVICE_NAME}" 2>/dev/null || true
+      rm -f "$HOME/.config/systemd/user/${LEGACY_SERVICE_NAME}.service"
+      systemctl --user daemon-reload 2>/dev/null || true
+    fi
+  elif [[ "$OS_NAME" == "Darwin" ]]; then
+    local LEGACY_PLIST="$HOME/Library/LaunchAgents/${LEGACY_LAUNCHD_LABEL}.plist"
+    if [[ -f "$LEGACY_PLIST" ]]; then
+      echo ">> Найден старый launchd ${LEGACY_LAUNCHD_LABEL} — мигрирую."
+      launchctl unload "$LEGACY_PLIST" 2>/dev/null || true
+      rm -f "$LEGACY_PLIST"
+    fi
+  fi
+  # Переносим конфиг (token / config.json) из ~/.pocket-claude в ~/.autmzr-command
+  if [[ -d "$LEGACY_DIR" ]] && [[ ! -d "$DIR" ]]; then
+    echo ">> Переношу конфиг ${LEGACY_DIR} → ${DIR}"
+    mkdir -p "$DIR"
+    chmod 700 "$DIR"
+    cp -a "$LEGACY_DIR/." "$DIR/" 2>/dev/null || true
+  fi
+  # Чистим зависшие nohup-процессы из старого пути
+  pkill -f 'pocket-claude/agent.js' 2>/dev/null || true
+}
+migrate_legacy
+
 mkdir -p "$DIR"
 chmod 700 "$DIR"
 
@@ -93,17 +140,17 @@ install_node_pty
 
 # Очищаем старые nohup-процессы агента (оставшиеся от предыдущих установок),
 # чтобы не было конфликта с новым systemd-юнитом.
-pkill -f 'pocket-claude/agent.js' 2>/dev/null || true
+pkill -f 'autmzr-command/agent.js' 2>/dev/null || true
 sleep 1
 
 # Install service
 if [[ "$OS" == "Linux" ]]; then
   # Под root ставим system-unit с лимитами и auto-restart.
   if [[ $EUID -eq 0 ]]; then
-    UNIT="/etc/systemd/system/pocket-claude-agent.service"
+    UNIT="/etc/systemd/system/${SERVICE_NAME}.service"
     cat > "$UNIT" <<EOF
 [Unit]
-Description=Pocket Claude Agent (node-pty + WebSocket)
+Description=Autmzr Command Agent (node-pty + WebSocket)
 After=network-online.target
 Wants=network-online.target
 
@@ -124,16 +171,16 @@ TasksMax=200
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
-    systemctl enable --now pocket-claude-agent
-    echo "✓ systemd system service: pocket-claude-agent"
-    echo "  logs: journalctl -u pocket-claude-agent -f"
+    systemctl enable --now "${SERVICE_NAME}"
+    echo "✓ systemd system service: ${SERVICE_NAME}"
+    echo "  logs: journalctl -u ${SERVICE_NAME} -f"
   else
     # Non-root — user-scope (работает пока юзер залогинен или linger включён)
-    UNIT="$HOME/.config/systemd/user/pocket-claude-agent.service"
+    UNIT="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
     mkdir -p "$(dirname "$UNIT")"
     cat > "$UNIT" <<EOF
 [Unit]
-Description=Pocket Claude Agent
+Description=Autmzr Command Agent
 After=network-online.target
 
 [Service]
@@ -145,19 +192,19 @@ RestartSec=5
 WantedBy=default.target
 EOF
     systemctl --user daemon-reload
-    systemctl --user enable --now pocket-claude-agent
-    echo "✓ systemd user service: pocket-claude-agent"
-    echo "  logs: journalctl --user -u pocket-claude-agent -f"
+    systemctl --user enable --now "${SERVICE_NAME}"
+    echo "✓ systemd user service: ${SERVICE_NAME}"
+    echo "  logs: journalctl --user -u ${SERVICE_NAME} -f"
     echo "  (для auto-start при reboot без логина: sudo loginctl enable-linger $USER)"
   fi
 elif [[ "$OS" == "Darwin" ]]; then
-  PLIST="$HOME/Library/LaunchAgents/dev.pocket-claude.agent.plist"
+  PLIST="$HOME/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
   NODE=$(which node)
   cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>dev.pocket-claude.agent</string>
+  <key>Label</key><string>${LAUNCHD_LABEL}</string>
   <key>ProgramArguments</key><array>
     <string>$NODE</string><string>$DIR/agent.js</string>
   </array>
@@ -169,7 +216,7 @@ elif [[ "$OS" == "Darwin" ]]; then
 EOF
   launchctl unload "$PLIST" 2>/dev/null || true
   launchctl load "$PLIST"
-  echo "✓ launchd service: dev.pocket-claude.agent"
+  echo "✓ launchd service: ${LAUNCHD_LABEL}"
   echo "  logs: tail -f $DIR/agent.log"
 else
   echo "⚠ Unknown OS ($OS). Start manually:"
@@ -182,21 +229,21 @@ cat > "$DIR/uninstall.sh" <<EOF
 set -e
 OS=\$(uname -s)
 if [[ "\$OS" == "Linux" ]]; then
-  if [[ \$EUID -eq 0 ]] && [[ -f /etc/systemd/system/pocket-claude-agent.service ]]; then
-    systemctl disable --now pocket-claude-agent 2>/dev/null || true
-    rm -f /etc/systemd/system/pocket-claude-agent.service
+  if [[ \$EUID -eq 0 ]] && [[ -f /etc/systemd/system/${SERVICE_NAME}.service ]]; then
+    systemctl disable --now ${SERVICE_NAME} 2>/dev/null || true
+    rm -f /etc/systemd/system/${SERVICE_NAME}.service
     systemctl daemon-reload
   else
-    systemctl --user disable --now pocket-claude-agent 2>/dev/null || true
-    rm -f "$HOME/.config/systemd/user/pocket-claude-agent.service"
+    systemctl --user disable --now ${SERVICE_NAME} 2>/dev/null || true
+    rm -f "$HOME/.config/systemd/user/${SERVICE_NAME}.service"
     systemctl --user daemon-reload 2>/dev/null || true
   fi
 elif [[ "\$OS" == "Darwin" ]]; then
-  launchctl unload "$HOME/Library/LaunchAgents/dev.pocket-claude.agent.plist" 2>/dev/null || true
-  rm -f "$HOME/Library/LaunchAgents/dev.pocket-claude.agent.plist"
+  launchctl unload "$HOME/Library/LaunchAgents/${LAUNCHD_LABEL}.plist" 2>/dev/null || true
+  rm -f "$HOME/Library/LaunchAgents/${LAUNCHD_LABEL}.plist"
 fi
 rm -rf "$DIR"
-echo "Pocket Claude agent uninstalled."
+echo "Autmzr Command agent uninstalled."
 EOF
 chmod +x "$DIR/uninstall.sh"
 
@@ -209,13 +256,13 @@ echo "Uninstall: $DIR/uninstall.sh"
 sleep 6
 echo ""
 echo ">> Проверяю что агент жив..."
-is_active_sys=$(systemctl is-active pocket-claude-agent 2>/dev/null || true)
-is_active_user=$(systemctl --user is-active pocket-claude-agent 2>/dev/null || true)
+is_active_sys=$(systemctl is-active "${SERVICE_NAME}" 2>/dev/null || true)
+is_active_user=$(systemctl --user is-active "${SERVICE_NAME}" 2>/dev/null || true)
 # Показываем последние 15 строк лога ВСЕГДА — чтобы видеть connected/disconnected
 # и ошибки даже если процесс мгновенно рестартает в active.
 echo "────── последние 15 строк лога агента ──────"
-journalctl -u pocket-claude-agent -n 15 --no-pager 2>/dev/null \
-  || journalctl --user -u pocket-claude-agent -n 15 --no-pager 2>/dev/null \
+journalctl -u "${SERVICE_NAME}" -n 15 --no-pager 2>/dev/null \
+  || journalctl --user -u "${SERVICE_NAME}" -n 15 --no-pager 2>/dev/null \
   || echo "(journalctl недоступен)"
 echo "────────────────────────────────────────────"
 if [[ "$is_active_sys" == "active" || "$is_active_user" == "active" ]]; then

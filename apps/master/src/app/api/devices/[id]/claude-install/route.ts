@@ -5,14 +5,14 @@ import { hub } from '@/lib/ws-hub';
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimit } from '@/lib/rate-limit';
 import { requireCsrf } from '@/lib/csrf';
-import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@pocket-claude/protocol';
+import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@autmzr/command-protocol';
 
 /**
  * POST /api/devices/[id]/claude-install
  * Устанавливает Claude Code CLI на устройстве через npm install -g.
  * Стримит вывод в браузер через SSE (text/event-stream).
  *
- * После успеха — запрашивает `claude --version` и обновляет claude_installed+version в БД.
+ * После успеха — запрашивает `claude --version` и обновляет agent_installed+agent_version в БД.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const csrfBlocked = await requireCsrf(req);
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // Если версию удалось распарсить — значит claude поставлен, обновим БД
         if (lastVersion && exitCode === 0) {
           await query(
-            `UPDATE pc.devices SET claude_installed = true, claude_version = $1 WHERE id = $2`,
+            `UPDATE pc.devices SET agent_installed = true, agent_version = $1 WHERE id = $2`,
             [lastVersion, deviceIdSafe],
           ).catch(() => {});
           push({ type: 'installed', version: lastVersion });

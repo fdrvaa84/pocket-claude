@@ -15,7 +15,7 @@ import type {
   FsReadRequest, FsReadReply,
   FsWriteRequest, FsWriteReply,
   ExecRequest,
-} from '@pocket-claude/protocol';
+} from '@autmzr/command-protocol';
 import { hub } from '@/lib/ws-hub';
 import { validateRfsToken } from '@/lib/rfs-tokens';
 

@@ -25,7 +25,7 @@ function warn(s: string) { console.log(`\x1b[33m⚠\x1b[0m ${s}`); }
 function die(s: string): never { console.error(`\x1b[31m✗\x1b[0m ${s}`); process.exit(1); }
 
 async function main() {
-  log('\nPocket Claude — setup wizard\n');
+  log('\nAutmzr Command — setup wizard\n');
 
   // Prerequisites
   const nodeMajor = Number(process.versions.node.split('.')[0]);
@@ -71,7 +71,7 @@ async function main() {
   log('  1. Start Postgres (if not running):');
   log('     docker compose up -d postgres');
   log('  2. Apply migrations:');
-  log('     pnpm --filter @pocket-claude/master migrate');
+  log('     pnpm --filter @autmzr/command-master migrate');
   log('  3. Run master in dev:');
   log('     pnpm dev');
   log('\nThen open http://localhost:3100 and sign in.\n');

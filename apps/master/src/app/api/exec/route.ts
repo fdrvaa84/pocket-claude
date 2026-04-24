@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { queryOne } from '@/lib/db';
 import { hub } from '@/lib/ws-hub';
 import { v4 as uuidv4 } from 'uuid';
-import type { ExecRequest } from '@pocket-claude/protocol';
+import type { ExecRequest } from '@autmzr/command-protocol';
 
 export async function POST(req: NextRequest) {
   const user = await getAuthUser();

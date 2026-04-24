@@ -10,7 +10,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const rows = await query<any>(
     `SELECT id, name, kind, hostname, os, arch, capabilities, last_online, last_version,
-            claude_logged_in, claude_installed, claude_version,
+            agent_logged_in, agent_installed, agent_version, agent_kind,
             root_path, intent, created_at
      FROM pc.devices WHERE user_id = $1 ORDER BY created_at DESC`,
     [user.id],

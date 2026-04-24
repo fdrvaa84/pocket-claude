@@ -1,8 +1,8 @@
 {
-  "name": "pocket-claude",
+  "name": "autmzr-command",
   "version": "0.1.0",
   "private": true,
-  "description": "Your Claude Code CLI in your pocket. Self-hosted, open-source.",
+  "description": "Autmzr Command — your AI command center. In your pocket. Self-hosted, open-source.",
   "license": "MIT",
   "workspaces": [
     "apps/*",

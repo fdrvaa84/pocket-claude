@@ -7,7 +7,7 @@ import type {
   FsMkdirRequest, FsMkdirReply,
   FsDeleteRequest, FsDeleteReply,
   FsEntry,
-} from '@pocket-claude/protocol';
+} from '@autmzr/command-protocol';
 import { safePath, SafetyError } from '../safety.js';
 
 const MAX_READ = 5 * 1024 * 1024;

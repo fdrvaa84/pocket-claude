@@ -1,5 +1,5 @@
 import { resolve, normalize } from 'node:path';
-import { isPathBlocked } from '@pocket-claude/protocol';
+import { isPathBlocked } from '@autmzr/command-protocol';
 
 /**
  * Безопасность агента.

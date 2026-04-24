@@ -9,8 +9,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type {
   AnyMessage, HelloMessage, JobsRecap, JobsResume, JobsAck,
   PtyOpenRequest, PtyDataMessage, PtyResizeMessage, PtyCloseMessage,
-} from '@pocket-claude/protocol';
-import { PROTOCOL_VERSION } from '@pocket-claude/protocol';
+} from '@autmzr/command-protocol';
+import { PROTOCOL_VERSION } from '@autmzr/command-protocol';
 import { hub } from '../src/lib/ws-hub';
 import { queryOne, query } from '../src/lib/db';
 import { hashToken } from '../src/lib/crypto';
@@ -149,7 +149,7 @@ function onAgentConnect(ws: WebSocket, device: { id: string; user_id: string; na
       query(
         `UPDATE pc.devices
          SET hostname=$1, os=$2, arch=$3, capabilities=$4::jsonb, last_version=$5,
-             claude_logged_in=$6, claude_installed=$7, claude_version=$8, last_online=NOW()
+             agent_logged_in=$6, agent_installed=$7, agent_version=$8, last_online=NOW()
          WHERE id=$9`,
         [
           h.hostname, h.os, h.arch, JSON.stringify(h.capabilities), h.version,

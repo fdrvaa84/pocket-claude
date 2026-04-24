@@ -3,14 +3,18 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 export interface AgentConfig {
-  master_url: string;       // wss://claude.mydomain.com/ws/agent
+  master_url: string;       // wss://command.mydomain.com/ws/agent
   token: string;            // device_token
   name: string;             // human-readable
   installed_at: string;     // ISO
 }
 
-export const CONFIG_DIR = join(homedir(), '.pocket-claude');
+// Новое имя — после ребрендинга в Autmzr Command. Старое (.pocket-claude)
+// остаётся fallback'ом для уже установленных агентов на старых хостах.
+export const CONFIG_DIR = join(homedir(), '.autmzr-command');
 export const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
+const LEGACY_CONFIG_DIR = join(homedir(), '.pocket-claude');
+const LEGACY_CONFIG_PATH = join(LEGACY_CONFIG_DIR, 'config.json');
 
 export function loadConfig(): AgentConfig {
   // CLI > env > file
@@ -37,9 +41,14 @@ export function loadConfig(): AgentConfig {
     const raw = readFileSync(CONFIG_PATH, 'utf8');
     return JSON.parse(raw);
   }
+  // Backward-compat: старая директория .pocket-claude (до ребрендинга).
+  if (existsSync(LEGACY_CONFIG_PATH)) {
+    const raw = readFileSync(LEGACY_CONFIG_PATH, 'utf8');
+    return JSON.parse(raw);
+  }
 
-  console.error('pocket-claude-agent: no config found.');
-  console.error('Use: pocket-claude-agent --master wss://... --token ... --name ...');
+  console.error('autmzr-command-agent: no config found.');
+  console.error('Use: autmzr-command-agent --master wss://... --token ... --name ...');
   console.error('Or: set PC_MASTER_URL, PC_TOKEN, PC_NAME env vars.');
   console.error('Or: create ' + CONFIG_PATH);
   process.exit(1);

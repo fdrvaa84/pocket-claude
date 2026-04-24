@@ -1,11 +1,11 @@
 {
-  "name": "@pocket-claude/agent",
+  "name": "@autmzr/command-agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "dist/agent.js",
   "bin": {
-    "pocket-claude-agent": "dist/agent.js"
+    "autmzr-command-agent": "dist/agent.js"
   },
   "scripts": {
     "dev": "tsx src/index.ts",
@@ -13,7 +13,7 @@
     "start": "node dist/agent.js"
   },
   "dependencies": {
-    "@pocket-claude/protocol": "*",
+    "@autmzr/command-protocol": "*",
     "ws": "^8.18.0"
   },
   "devDependencies": {

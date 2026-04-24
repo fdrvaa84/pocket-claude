@@ -5,7 +5,7 @@ import { hub } from '@/lib/ws-hub';
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimit } from '@/lib/rate-limit';
 import { requireCsrf } from '@/lib/csrf';
-import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@pocket-claude/protocol';
+import type { ExecRequest, ExecStdout, ExecStderr, ExecExit } from '@autmzr/command-protocol';
 
 /**
  * POST /api/devices/[id]/claude-set-credentials  { credentials: "<JSON>" }
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       async function finalize() {
         if (exitCode === 0) {
           await query(
-            `UPDATE pc.devices SET claude_logged_in = true WHERE id = $1`,
+            `UPDATE pc.devices SET agent_logged_in = true WHERE id = $1`,
             [deviceIdSafe],
           ).catch(() => {});
           push({ type: 'ok', message: 'Credentials скопированы, claude работает через твою подписку' });

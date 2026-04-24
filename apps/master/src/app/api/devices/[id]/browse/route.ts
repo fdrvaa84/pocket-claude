@@ -3,7 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { queryOne } from '@/lib/db';
 import { hub } from '@/lib/ws-hub';
 import { v4 as uuidv4 } from 'uuid';
-import type { FsListRequest, FsListReply } from '@pocket-claude/protocol';
+import type { FsListRequest, FsListReply } from '@autmzr/command-protocol';
 
 const DEFAULT_ROOTS = ['/opt', '/home', '/root', '/Users', '/tmp', '/srv', '/var'];
 
