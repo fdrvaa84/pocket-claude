@@ -203,19 +203,40 @@ export function handleClaude(
     send({ type: 'claude.event', correlation_id: req.id, event: { type: 'stderr', text } });
   });
 
-  proc.on('close', (code) => {
+  // Race-fix: при быстром крахе CLI (Gemini exit на проверке env) `close` иногда
+  // физдит ДО последнего stderr 'data' — буфер pipe ещё не прочитан Node-ом.
+  // Решение: ждём ОБА события (process exit + stderr stream end) перед финалом.
+  let exitCode: number | null = null;
+  let stderrEnded = false;
+  let finalSent = false;
+
+  const finalize = () => {
+    if (finalSent) return;
+    if (exitCode === null || !stderrEnded) return; // ждём оба
+    finalSent = true;
     clearTimeout(killer);
-    if (code !== 0 && !lastResult) {
-      // Показываем юзеру и код, и хвост stderr — иначе «exit 144» непригоден
-      // для диагностики (особенно для Gemini, который валится без stdout).
+    if (exitCode !== 0 && !lastResult) {
       const tail = stderrTail.trim();
       const message = tail
-        ? `${provider} exited with code ${code}:\n${tail}`
-        : `${provider} exited with code ${code}`;
+        ? `${provider} exited with code ${exitCode}:\n${tail}`
+        : `${provider} exited with code ${exitCode}`;
       send({ type: 'claude.error', correlation_id: req.id, message });
       return;
     }
     send({ type: 'claude.done', correlation_id: req.id, session_id: lastSessionId, result: lastResult });
+  };
+
+  proc.stderr.on('end', () => { stderrEnded = true; finalize(); });
+  proc.on('exit', (code) => { exitCode = code ?? -1; finalize(); });
+  // Fallback: если по какой-то причине stderr 'end' не пришёл за 500мс после exit,
+  // финалим без хвоста — лучше показать просто код, чем висеть.
+  proc.on('exit', () => {
+    setTimeout(() => {
+      if (!stderrEnded && !finalSent) {
+        stderrEnded = true;
+        finalize();
+      }
+    }, 500);
   });
 
   proc.on('error', (err) => {
