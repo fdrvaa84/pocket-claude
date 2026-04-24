@@ -1,11 +1,11 @@
 /* ==========================================================================
    /welcome/cool — палитра переписана vs базовый /welcome.
    Layout/components те же (импортируем из /components/landing/*).
-   Все компоненты юзают var(--xxx) — переопределяем здесь scope'd под .cool-root.
+   Все компоненты юзают var(--xxx) — переопределяем здесь scope'd под .welcome-root.
    Цель: уйти от Claude warm-earth → cool-stone + emerald.
    ========================================================================== */
 
-.cool-root {
+.welcome-root {
   /* === Cool stone palette === */
   --bg:        #f4f4f3;          /* cool stone-100, чуть холоднее чем claude beige */
   --bg-2:      #e9e9e7;          /* секции через одну, слегка холоднее */
