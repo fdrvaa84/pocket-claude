@@ -19,6 +19,7 @@ const PtyTerminal = dynamic(() => import('./PtyTerminal'), { ssr: false, loading
 const DeviceAddModal = dynamic(() => import('./DeviceAddModal'), { ssr: false, loading: () => null });
 const ProjectCreateModal = dynamic(() => import('./ProjectCreateModal'), { ssr: false, loading: () => null });
 const Settings = dynamic(() => import('./Settings'), { ssr: false, loading: () => null });
+const DeviceSheet = dynamic(() => import('./DeviceSheet'), { ssr: false, loading: () => null });
 const FileEditor = dynamic(() => import('./FileEditor'), { ssr: false, loading: () => null });
 const MobileChatSheet = dynamic(() => import('./MobileChatSheet'), { ssr: false, loading: () => null });
 
@@ -27,7 +28,15 @@ interface Device {
   id: string; name: string; kind: string; hostname: string | null;
   os?: string | null; arch?: string | null;
   online: boolean;
-  agent_logged_in: boolean | null; last_online: string | null; root_path: string | null;
+  agent_logged_in: boolean | null;
+  agent_installed?: boolean | null;
+  agent_version?: string | null;
+  agent_kind?: string | null;
+  gemini_installed?: boolean | null;
+  gemini_version?: string | null;
+  gemini_logged_in?: boolean | null;
+  preferred_agent?: 'claude-code' | 'gemini-cli' | null;
+  last_online: string | null; root_path: string | null;
   intent?: DeviceIntent | null;
 }
 interface Project {
@@ -139,6 +148,7 @@ export default function AppShell({ user }: { user: User }) {
   const [showAddDevice, setShowAddDevice] = useState(false);
   const [showAddProject, setShowAddProject] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [openDeviceId, setOpenDeviceId] = useState<string | null>(null);
   const [rightTab, setRightTab] = useState<'files' | 'terminal'>('files');
   const [openFile, setOpenFile] = useState<string | null>(null);
   const [slashOpen, setSlashOpen] = useState(false);
@@ -562,7 +572,7 @@ export default function AppShell({ user }: { user: User }) {
             const claudeDevs = devices.filter(d => effectiveIntent(d) === 'claude');
             const fsDevs = devices.filter(d => effectiveIntent(d) === 'fs-only');
             const renderRow = (d: Device, role: 'claude' | 'fs-only') => (
-              <button key={d.id} onClick={() => setShowSettings(true)}
+              <button key={d.id} onClick={() => setOpenDeviceId(d.id)}
                 className="group w-full flex items-center gap-1.5 px-2 py-[5px] rounded-md hover:bg-[var(--surface-2)] text-left"
                 title={`${d.name} · ${d.os || ''}/${d.arch || ''}${d.hostname ? ' · ' + d.hostname : ''}`}>
                 <span className="text-[12px] leading-none w-3.5 shrink-0">{role === 'claude' ? '🤖' : '📂'}</span>
@@ -762,7 +772,7 @@ export default function AppShell({ user }: { user: User }) {
                       {devices.map((d, idx) => {
                         const isLast = idx === devices.length - 1;
                         return (
-                          <button key={d.id} onClick={() => setShowSettings(true)}
+                          <button key={d.id} onClick={() => setOpenDeviceId(d.id)}
                             className="w-full flex items-center gap-2.5 px-2 py-2 rounded hover:bg-[var(--surface)] text-left">
                             <span className="font-mono text-[12px] w-4 shrink-0" style={{ color: 'var(--muted)' }}>{isLast ? '└─' : '├─'}</span>
                             <span className="font-mono text-[10px] shrink-0"
@@ -1260,6 +1270,27 @@ export default function AppShell({ user }: { user: User }) {
           });
           if (r.ok) { const j = await r.json(); setActiveProjectId(j.id); loadProjects(); }
         }} />}
+
+      {/* Focused sheet для одного устройства — открывается тапом по девайсу
+          на welcome-экране или в sidebar. Внутри только его статус и действия. */}
+      {openDeviceId && (() => {
+        const d = devices.find(x => x.id === openDeviceId);
+        if (!d) return null;
+        return <DeviceSheet
+          device={d}
+          onClose={() => setOpenDeviceId(null)}
+          onReload={loadDevices}
+          onOpenSettings={() => { setOpenDeviceId(null); setShowSettings(true); }}
+          onCreateProject={async (deviceId, path) => {
+            const name = path.split('/').filter(Boolean).pop() || 'project';
+            const r = await fetch('/api/projects', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name, device_id: deviceId, path }),
+            });
+            if (r.ok) { const j = await r.json(); setActiveProjectId(j.id); loadProjects(); }
+          }}
+        />;
+      })()}
       {openFile && activeProjectId && (
         <FileEditor projectId={activeProjectId} filePath={openFile} onClose={() => setOpenFile(null)} />
       )}
